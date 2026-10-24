@@ -20,22 +20,33 @@ img{max-width:100%}
 <link rel="stylesheet" href="assets/console.css">
 </head>
 <body>
-<header class="bar">
-  <div class="bar-in">
-    <h1>민원 조회 콘솔</h1>
-    <nav class="nav">
-      <a href="index.html" aria-current="page">조회·다운로드</a>
-      <a href="forecast.html">설 예측</a>
-    </nav>
-    <span class="sp"></span>
-    <span class="src" id="src">데이터 불러오는 중…</span>
+<div class="app">
+<aside class="side">
+ <div class="side-in">
+  <div class="brand">
+    <span class="logo">CS</span>
+    <span class="bn"><b>민원 조회 콘솔</b><em>CS-MST</em></span>
   </div>
-</header>
-
-<div class="shell">
-
-  <section class="sec" style="margin-top:28px">
-    <div class="sec-hd"><h2>조회 조건</h2></div>
+  <nav class="snav">
+    <span class="grp">업무</span>
+    <a href="index.html" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="forecast.html"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5l3.5-4 2.8 2.4L14 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 4.5H14v3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>민원 예측</a>
+  </nav>
+  <div class="side-foot" id="src"><span class="lbl">데이터</span>불러오는 중…</div>
+ </div>
+</aside>
+<main class="main">
+  <header class="phead">
+    <div>
+      <h2>조회·다운로드</h2>
+      <p>마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.</p>
+    </div>
+    <div class="phead-act" id="phead-act"></div>
+  </header>
+  <div class="content">
+<section class="card">
+    <div class="card-hd"><h3>조회 조건</h3></div>
+    <div class="card-bd">
     <div class="tools">
       <div class="f wide"><label for="d1">등록일</label>
         <div class="in"><input type="date" id="d1"><span class="tilde">—</span><input type="date" id="d2"></div></div>
@@ -64,19 +75,20 @@ img{max-width:100%}
       <span aria-hidden="true">▲</span>
       <span><b>조회 기간 90일 초과.</b> 운영계에서는 보통 여기서 조회를 막거나 비동기 처리로 넘깁니다.</span>
     </div>
+    </div>
   </section>
 
-  <section class="sec">
-    <div class="sec-hd"><h2>조회 결과 요약</h2></div>
-    <div class="figs" id="figs"></div>
+  <section class="card">
+    <div class="card-hd"><h3>조회 결과 요약</h3></div>
+    <div class="card-bd" style="padding-bottom:0"><div class="figs" id="figs"></div></div>
     <div class="plots">
       <div class="plot"><h3>등록 시간대별 접수</h3><div id="ch-hour"></div></div>
       <div class="plot"><h3>민원유형 상위 8</h3><div class="rank" id="ch-type"></div></div>
     </div>
   </section>
 
-  <section class="sec">
-    <div class="sec-hd"><h2>조회 결과</h2></div>
+  <section class="card">
+    <div class="card-hd"><h3>조회 결과</h3></div>
     <div class="resline">
       <span class="c">총 <b id="total">0</b> 건</span>
       <span class="sp"></span>
@@ -100,19 +112,21 @@ img{max-width:100%}
     <div class="pager" id="pager"></div>
   </section>
 
-  <section class="sec">
-    <div class="sec-hd"><h2>다운로드 이력</h2><span class="sp"></span>
+  <section class="card">
+    <div class="card-hd"><h3>다운로드 이력</h3><span class="sp"></span>
       <button class="btn btn-sm" id="btn-clearhist">이력 삭제</button></div>
     <div class="tscroll"><table class="hist">
       <thead><tr><th>일시</th><th>조회 조건</th><th style="text-align:right">건수</th><th>처리</th></tr></thead>
       <tbody id="hist"></tbody></table></div>
-    <p class="hint">「개인정보의 안전성 확보조치 기준」 제8조는 개인정보취급자의 접속기록과 개인정보 다운로드 상황을 확인·점검하도록 합니다. 운영계에서는 이 표가 브라우저가 아니라 서버 로그여야 하고, 고유식별정보를 처리하면 2년 이상 보관 대상입니다.</p>
+    <div class="card-bd" style="padding-top:0"><p class="hint" style="margin-top:0">「개인정보의 안전성 확보조치 기준」 제8조는 개인정보취급자의 접속기록과 개인정보 다운로드 상황을 확인·점검하도록 합니다. 운영계에서는 이 표가 브라우저가 아니라 서버 로그여야 하고, 고유식별정보를 처리하면 2년 이상 보관 대상입니다.</p></div>
   </section>
 
-  <p class="foot">
+  <section class="card"><div class="card-bd"><p class="hint" style="margin:0">
     본문은 모두 <code>tools/pii_mask.py</code>를 통과한 결과입니다. <span class="tok">&lt;이름_1&gt;</span> 토큰은 행 단위로 일관되게 부여되므로 동일인 추적이 가능하고, 원문 대응표는 이 화면에 없습니다.
     접수번호는 <code>surrogate</code>, 날짜는 <code>hour</code> 모드로 처리해 행 식별과 시간축을 남겼습니다 — 두 값을 형식 문자열로 완전히 치환하면 이 화면의 기간 조회도 시간대별 집계도 성립하지 않습니다.
-  </p>
+  </p></div></section>
+  </div>
+</main>
 </div>
 
 <div id="dw-host"></div>
@@ -185,20 +199,20 @@ function renderFigs(){
   const bw = (W - PL - PR) / 24, Y = v => PT + (Hh - PT - PB) * (1 - v / mx);
   let s = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="등록 시간대별 접수 건수">`;
   [0, Math.round(mx / 2), mx].forEach(t => {
-    s += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--rule)"/>`
+    s += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)"/>`
       + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
-      + ` font-family="var(--mono)" fill="var(--ink-3)">${nf(t)}</text>`; });
+      + ` font-family="var(--mono)" fill="var(--text-3)">${nf(t)}</text>`; });
   H.forEach((v, i) => {
     const h = v > 0 ? Math.max(2, (Hh - PT - PB) * v / mx) : 0, x = PL + i * bw + 1.5;
     if (h > 0) s += `<rect x="${x.toFixed(1)}" y="${(Hh - PB - h).toFixed(1)}" width="${(bw - 3).toFixed(1)}"`
-      + ` height="${h.toFixed(1)}" rx="2" fill="var(--accent)" opacity="${v === mx ? 1 : .34}">`
+      + ` height="${h.toFixed(1)}" rx="2" fill="var(--brand)" opacity="${v === mx ? 1 : .34}">`
       + `<title>${i}시 — ${nf(v)}건</title></rect>`;
     if (i % 3 === 0) s += `<text x="${(x + bw / 2 - 1.5).toFixed(1)}" y="${Hh - 7}" text-anchor="middle"`
-      + ` font-size="9.5" font-family="var(--mono)" fill="var(--ink-3)">${i}</text>`;
+      + ` font-size="9.5" font-family="var(--mono)" fill="var(--text-3)">${i}</text>`;
   });
   const pk = H.indexOf(mx);
   if (mx > 1) s += `<text x="${(PL + pk * bw + bw / 2).toFixed(1)}" y="${(PT - 4).toFixed(1)}" text-anchor="middle"`
-    + ` font-size="10" font-weight="600" font-family="var(--mono)" fill="var(--accent)">${nf(mx)}</text>`;
+    + ` font-size="10" font-weight="600" font-family="var(--mono)" fill="var(--brand)">${nf(mx)}</text>`;
   $('ch-hour').innerHTML = s + '</svg>';
 
   const cnt = {}; view.forEach(r => cnt[r['민원유형']] = (cnt[r['민원유형']] || 0) + 1);
@@ -207,7 +221,7 @@ function renderFigs(){
     `<div class="rk"><span class="nm" title="${esc(k)}">${esc(k)}</span>`
     + `<span class="tr"><i style="width:${(v / tm * 100).toFixed(1)}%"></i></span>`
     + `<span class="ct">${nf(v)}</span></div>`).join('')
-    : '<p style="color:var(--ink-3);font-size:12px;margin:0">표시할 데이터가 없습니다.</p>';
+    : '<p style="color:var(--text-3);font-size:12px;margin:0">표시할 데이터가 없습니다.</p>';
 }
 function renderRows(){
   const size = +$('pgsize').value, start = (page - 1) * size, slice = view.slice(start, start + size);
@@ -233,7 +247,7 @@ function renderPager(){
   if (last > 1) nums.push(last);
   let h = `<button ${page === 1 ? 'disabled' : ''} data-p="${page - 1}" aria-label="이전">‹</button>`, prev = 0;
   for (const p of [...new Set(nums)].sort((a, b) => a - b)){
-    if (prev && p - prev > 1) h += `<span style="color:var(--ink-3);padding:0 3px">…</span>`;
+    if (prev && p - prev > 1) h += `<span style="color:var(--text-3);padding:0 3px">…</span>`;
     h += `<button data-p="${p}" ${p === page ? 'aria-current="page"' : ''}>${p}</button>`; prev = p;
   }
   h += `<button ${page === last ? 'disabled' : ''} data-p="${page + 1}" aria-label="다음">›</button>`
@@ -318,7 +332,7 @@ function renderHist(){
   $('hist').innerHTML = h.length ? h.map(x =>
     `<tr><td class="m">${stamp(x.t)}</td><td>${esc(x.c)}</td>`
     + `<td class="m" style="text-align:right">${nf(x.n)}</td><td class="nw">${esc(x.how)}</td></tr>`).join('')
-    : `<tr><td colspan="4" style="color:var(--ink-3);padding:16px 10px">다운로드 이력이 없습니다.</td></tr>`;
+    : `<tr><td colspan="4" style="color:var(--text-3);padding:16px 10px">다운로드 이력이 없습니다.</td></tr>`;
 }
 
 /* ---------- 조건 UI ---------- */
@@ -390,9 +404,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
   DATA = await loadCSV('data/masked_seasonal.csv') || [];
   if (DATA.length){
     const r = `${day(DATA[0]['등록일'])} — ${day(DATA[DATA.length - 1]['등록일'])}`;
-    $('src').innerHTML = `합성 더미 <b>${nf(DATA.length)}</b>행 · ${esc(r)}`;
+    $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
   } else {
-    $('src').textContent = 'data/masked_seasonal.csv 를 불러오지 못했습니다';
+    $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
   }
   fillSelects(); setPreset(0); renderHist(); applyFilter(); render();
 })();
