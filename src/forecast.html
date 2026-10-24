@@ -1,4 +1,4 @@
-<title>설 연휴 민원 예측</title>
+<title>민원 예측</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -9,215 +9,375 @@
     <h1>민원 조회 콘솔</h1>
     <nav class="nav">
       <a href="index.html">조회·다운로드</a>
-      <a href="forecast.html" aria-current="page">설 예측</a>
+      <a href="forecast.html" aria-current="page">민원 예측</a>
     </nav>
     <span class="sp"></span>
-    <span class="src" id="src">예측 결과 불러오는 중…</span>
+    <span class="src" id="src">모델 불러오는 중…</span>
   </div>
 </header>
 
 <div class="shell">
-  <div id="body">
-    <section class="sec" style="margin-top:28px">
-      <div class="sec-hd"><h2>예측 요약</h2></div>
-      <div class="sk"></div><div class="sk"></div><div class="sk"></div>
-    </section>
-  </div>
+  <section class="sec" style="margin-top:28px">
+    <div class="sec-hd"><h2>예측할 날짜</h2><span class="sp"></span>
+      <span class="sub" id="range-hint"></span></div>
+    <div class="pick">
+      <div class="f"><label for="pd">날짜</label>
+        <div class="in"><input type="date" id="pd"></div></div>
+      <div class="f"><label>바로가기</label>
+        <div class="jump" id="jump"></div></div>
+    </div>
+    <p class="lede" id="lede" style="margin-top:16px"></p>
+  </section>
+
+  <div id="out"></div>
 </div>
 
 <script src="assets/common.js"></script>
 <script>
 'use strict';
+let M = null, HOL = {}, FESTS = [], CATCHUP = {}, D_MIN = null, D_MAX = '2027-12-31';
 
-function svgChart(F){
-  const fc = F.forecast, s = F.summary;
-  const W = 700, H = 216, PL = 38, PR = 12, PT = 20, PB = 34;
-  const n = fc.length, iw = (W - PL - PR) / (n - 1);
-  const act = fc.map(f => F.chuseokActual[String(f.rel)].n);
-  const yMax = Math.max(...fc.map(f => f.hi), ...act) * 1.06;
-  const X = i => PL + i * iw, Y = v => PT + (H - PT - PB) * (1 - v / yMax);
-  const hs = fc.findIndex(f => f.holiday), he = fc.map(f => f.holiday).lastIndexOf(true);
-  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="추석 실적과 설 예측 비교">`;
-  if (hs >= 0) g += `<rect x="${(X(hs) - iw / 2).toFixed(1)}" y="${PT}" width="${((he - hs + 1) * iw).toFixed(1)}"`
-    + ` height="${H - PT - PB}" fill="var(--accent-soft)"/>`
-    + `<text x="${X((hs + he) / 2).toFixed(1)}" y="${H - PB - 5}" text-anchor="middle" font-size="9.5"`
-    + ` font-family="var(--mono)" fill="var(--accent)">설 연휴</text>`;
-  [0, Math.round(yMax / 2), Math.round(yMax)].forEach(t => {
+/* 로컬 날짜 기준. toISOString() 은 UTC 로 바꾸므로 한국(UTC+9)에서는
+   자정이 전날로 밀려 공휴일 판정이 하루씩 어긋난다. */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+               + `-${String(d.getDate()).padStart(2, '0')}`;
+const parse = s => new Date(s + 'T00:00:00');
+const wd = d => (d.getDay() + 6) % 7;                 /* 0=월 … 6=일 */
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const dayDiff = (a, b) => Math.round((a - b) / 86400000);
+
+/* 공휴일 다음 영업일 — 주말과 연속 공휴일을 건너뛴다 */
+function nextBusiness(d){
+  let n = addDays(d, 1);
+  while (wd(n) >= 5 || HOL[iso(n)]) n = addDays(n, 1);
+  return n;
+}
+function buildCatchup(){
+  CATCHUP = {};
+  Object.keys(HOL).forEach(k => { CATCHUP[iso(nextBusiness(parse(k)))] = HOL[k]; });
+  Object.keys(HOL).forEach(k => { delete CATCHUP[k]; });   /* 공휴일 자신은 제외 */
+}
+
+/* 선택일이 어느 명절의 상대일 구간에 드는지 */
+function findFestival(d){
+  for (const f of FESTS){
+    const rel = dayDiff(d, parse(f.dday));
+    if (rel >= M.festival.relFrom && rel <= M.festival.relTo){
+      const a = parse(f.range[0]), b = parse(f.range[1]);
+      return { f, rel, inHoliday: d >= a && d <= b };
+    }
+  }
+  return null;
+}
+
+/* 모델 계산 — tools/forecast.py 의 수식을 그대로 따른다 */
+function predict(d){
+  const b = M.baseline;
+  const base = Math.max(1, b.intercept + b.slopePerDay * dayDiff(d, parse(b.anchor)));
+  const mo = M.month[String(d.getMonth() + 1)];
+  const monthF = mo ? mo.f : 1.0;
+  const monthOk = !!(mo && mo.applied);
+  const dowF = Number(M.dow[String(wd(d))] ?? 1);
+  const key = iso(d);
+  const fest = findFestival(d);
+
+  const parts = [];
+  parts.push({ k:'평시 기준선', why:`${b.anchor} 기준 추세 ${b.slopePerDay >= 0 ? '+' : ''}${b.slopePerDay}/일`,
+               v: base.toFixed(1) + ' 건/일', op:'' });
+
+  let f = base, kind, kindCls, note;
+
+  if (fest){
+    kind = `${fest.f.name} D${fest.rel > 0 ? '+' : ''}${fest.rel}` + (fest.inHoliday ? ' · 연휴' : '');
+    kindCls = 'fest';
+    if (fest.inHoliday){
+      parts.push({ k:'요일 계수', why:'연휴 중에는 적용하지 않음 — 명절 당일은 요일과 무관하게 움직인다',
+                   v:'1.00', op:'×', off:true });
+    } else {
+      f *= dowF;
+      parts.push({ k:`요일 계수 · ${DW[wd(d)]}요일`, why:'평시 실측에서 추정', v:dowF.toFixed(2), op:'×' });
+    }
+    f *= monthF;
+    parts.push({ k:`시기 계수 · ${d.getMonth() + 1}월`,
+                 why: monthOk ? `평시 ${mo.n}일 관측` : `관측 ${mo ? mo.n : 0}일 (${M.monthMinObs}일 미만) — 적용하지 않음`,
+                 v: monthF.toFixed(2), op:'×', off: !monthOk });
+    const up = Number(M.festival.uplift[String(fest.rel)] ?? 1);
+    const dirty = (M.festival.contaminatedRels || []).includes(fest.rel);
+    f *= up;
+    parts.push({ k:'명절 배수',
+                 why:`${M.festival.anchorName} ${M.festival.actual[String(fest.rel)].date} 실적에서 추정`
+                     + (dirty ? ' · 공휴일 오염으로 보간한 값' : ''),
+                 v: up.toFixed(2), op:'×' });
+    const bk = M.festival.booking;
+    if (fest.f.name === bk.targetFestival){
+      f *= bk.growth;
+      parts.push({ k:'수요 증감률', why:`예매기 실적비 (${bk.anchor.lift} → ${bk.target.lift})`,
+                   v:'× ' + bk.growth.toFixed(3), op:'×' });
+      note = 'booking';
+    } else {
+      parts.push({ k:'수요 증감률', why:`${fest.f.name} 예매기는 데이터 범위 밖이라 보정하지 않음`,
+                   v:'1.000', op:'×', off:true });
+      note = 'nobooking';
+    }
+  } else {
+    f *= dowF;
+    const weekend = wd(d) >= 5;
+    parts.push({ k:`요일 계수 · ${DW[wd(d)]}요일`, why:'평시 실측에서 추정', v:dowF.toFixed(2), op:'×' });
+    f *= monthF;
+    parts.push({ k:`시기 계수 · ${d.getMonth() + 1}월`,
+                 why: monthOk ? `평시 ${mo.n}일 관측` : `관측 ${mo ? mo.n : 0}일 (${M.monthMinObs}일 미만) — 적용하지 않음`,
+                 v: monthF.toFixed(2), op:'×', off: !monthOk });
+    const ph = M.publicHoliday;
+    if (HOL[key]){
+      f *= ph.factor;
+      kind = '공휴일 · ' + HOL[key]; kindCls = 'holi';
+      parts.push({ k:'공휴일 계수', why:`${ph.n}일 관측 — 고객센터 휴무로 접수가 줄어든다`,
+                   v: ph.factor.toFixed(2), op:'×' });
+    } else if (CATCHUP[key]){
+      f *= ph.catchupFactor;
+      kind = '공휴일 다음 영업일'; kindCls = 'holi';
+      parts.push({ k:'적체 계수', why:`${ph.catchupN}일 관측 — ${CATCHUP[key]} 동안 밀린 건이 들어온다`,
+                   v: ph.catchupFactor.toFixed(2), op:'×' });
+    } else {
+      kind = weekend ? '주말' : '평일'; kindCls = weekend ? 'week' : 'plain';
+    }
+  }
+
+  const pred = Math.round(f);
+  return { pred, lo: Math.round(pred * (1 - M.band)), hi: Math.round(pred * (1 + M.band)),
+           base, parts, kind, kindCls, fest, note,
+           ratio: pred / (base * (fest && fest.inHoliday ? 1 : dowF) * monthF) };
+}
+
+/* ── 주변 ±14일 미니 차트 ─────────────────────────────────────── */
+function miniChart(sel){
+  const span = 14, pts = [];
+  for (let i = -span; i <= span; i++){
+    const d = addDays(sel, i);
+    pts.push({ d, i, p: predict(d) });
+  }
+  const W = 700, H = 150, PL = 36, PR = 10, PT = 16, PB = 26;
+  const n = pts.length, bw = (W - PL - PR) / n;
+  const mx = Math.max(...pts.map(x => x.p.pred)) * 1.1 || 1;
+  const Y = v => PT + (H - PT - PB) * (1 - v / mx);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="선택일 전후 2주 예측">`;
+  [0, Math.round(mx / 2), Math.round(mx)].forEach(t => {
     g += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--rule)"/>`
       + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
       + ` font-family="var(--mono)" fill="var(--ink-3)">${nf(t)}</text>`; });
-  g += `<path d="M${fc.map((f, i) => `${X(i).toFixed(1)},${Y(f.hi).toFixed(1)}`).join(' L')}`
-    + ` L${fc.slice().reverse().map((f, i) => `${X(n - 1 - i).toFixed(1)},${Y(f.lo).toFixed(1)}`).join(' L')} Z"`
-    + ` fill="var(--accent)" opacity=".13"/>`;
-  g += `<polyline points="${act.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"`
-    + ` fill="none" stroke="var(--ink-3)" stroke-width="1.8" stroke-dasharray="4 3"/>`;
-  g += `<polyline points="${fc.map((f, i) => `${X(i).toFixed(1)},${Y(f.pred).toFixed(1)}`).join(' ')}"`
-    + ` fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
-  fc.forEach((f, i) => {
-    if (f.holiday) g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(f.pred).toFixed(1)}" r="3.4"`
-      + ` fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`;
-    if (f.rel % 4 === 0) g += `<text x="${X(i).toFixed(1)}" y="${H - 17}" text-anchor="middle" font-size="9.5"`
-      + ` font-family="var(--mono)" fill="var(--ink-3)">D${f.rel > 0 ? '+' : ''}${f.rel}</text>`;
-    g += `<rect x="${(X(i) - iw / 2).toFixed(1)}" y="${PT}" width="${iw.toFixed(1)}" height="${H - PT - PB}"`
-      + ` fill="transparent"><title>D${f.rel > 0 ? '+' : ''}${f.rel} ${f.date}\n설 예측 ${nf(f.pred)}건 (${nf(f.lo)}~${nf(f.hi)})`
-      + `\n추석 실적 ${nf(act[i])}건 · 명절배수 ${f.uplift}배</title></rect>`;
+  pts.forEach((x, k) => {
+    const h = Math.max(2, (H - PT - PB) * x.p.pred / mx), xx = PL + k * bw + 1;
+    const cur = x.i === 0;
+    g += `<rect x="${xx.toFixed(1)}" y="${(H - PB - h).toFixed(1)}" width="${(bw - 2).toFixed(1)}"`
+      + ` height="${h.toFixed(1)}" rx="2" fill="var(--accent)"`
+      + ` opacity="${cur ? 1 : (x.p.kindCls === 'fest' ? .5 : .24)}">`
+      + `<title>${iso(x.d)} (${DW[wd(x.d)]}) ${nf(x.p.pred)}건 · ${x.p.kind}</title></rect>`;
+    if (cur) g += `<text x="${(xx + bw / 2 - 1).toFixed(1)}" y="${(H - PB - h - 5).toFixed(1)}"`
+      + ` text-anchor="middle" font-size="10" font-weight="600" font-family="var(--mono)"`
+      + ` fill="var(--accent)">${nf(x.p.pred)}</text>`;
+    if (k % 4 === 0) g += `<text x="${(xx + bw / 2 - 1).toFixed(1)}" y="${H - 8}" text-anchor="middle"`
+      + ` font-size="9" font-family="var(--mono)" fill="var(--ink-3)">${iso(x.d).slice(5)}</text>`;
   });
-  const pi = fc.findIndex(f => f.date === s.peakDate);
-  g += `<text x="${X(pi).toFixed(1)}" y="${(Y(s.peakPred) - 9).toFixed(1)}" text-anchor="middle" font-size="11"`
-    + ` font-weight="600" font-family="var(--mono)" fill="var(--accent)">${nf(s.peakPred)}</text>`
-    + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--rule-2)"/></svg>`;
-  return g;
+  return g + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--rule-2)"/></svg>`;
 }
 
-function dailyRows(F){
-  const mx = Math.max(...F.forecast.map(f => f.hi));
-  return F.forecast.map(f => {
-    const a = F.chuseokActual[String(f.rel)];
-    const cls = [f.holiday ? 'hol' : '', f.date === F.summary.peakDate ? 'peak' : ''].filter(Boolean).join(' ');
-    // 추석 원본일의 요일을 같이 보여준다. 두 명절은 요일이 2일 어긋나므로
-    // 원시 건수를 직접 비교하면(예: 토요일 39건 vs 월요일 예측 106건) 오해를 부른다.
-    // 요일이 보정된 비교는 '명절배수' 열이 담당한다.
-    const sameDow = dowOf(f.date) === dowOf(a.date);
-    return `<tr class="${cls}">
-      <td class="m">D${f.rel > 0 ? '+' : ''}${f.rel}</td>
-      <td class="m">${f.date}<span class="wk"> (${dowOf(f.date)})</span></td>
-      <td class="n">${nf(f.pred)}</td>
-      <td class="n wk">${nf(f.lo)}–${nf(f.hi)}</td>
-      <td><span class="spark"><i style="width:${(f.pred / mx * 100).toFixed(1)}%"></i></span></td>
-      <td class="m wk">${a.date}<span style="opacity:${sameDow ? 1 : .55}"> (${dowOf(a.date)})</span></td>
-      <td class="n wk">${nf(a.n)}</td>
-      <td class="n">${f.uplift}배</td></tr>`;
-  }).join('');
+/* ── 명절 구간: 추석 실적 대비 ─────────────────────────────────── */
+function festivalChart(fest){
+  const F = M.festival, rf = F.relFrom, rt = F.relTo;
+  const rows = [];
+  for (let r = rf; r <= rt; r++){
+    const d = addDays(parse(fest.f.dday), r);
+    rows.push({ r, d, p: predict(d).pred, a: F.actual[String(r)].n });
+  }
+  const W = 700, H = 200, PL = 38, PR = 12, PT = 18, PB = 30;
+  const n = rows.length, iw = (W - PL - PR) / (n - 1);
+  const mx = Math.max(...rows.map(x => Math.max(x.p, x.a))) * 1.08 || 1;
+  const X = i => PL + i * iw, Y = v => PT + (H - PT - PB) * (1 - v / mx);
+  const hs = rows.findIndex(x => predict(x.d).fest?.inHoliday);
+  const he = rows.map(x => !!predict(x.d).fest?.inHoliday).lastIndexOf(true);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(M.festival.anchorName)} 실적 대비 ${esc(fest.f.name)} 예측">`;
+  if (hs >= 0) g += `<rect x="${(X(hs) - iw / 2).toFixed(1)}" y="${PT}" width="${((he - hs + 1) * iw).toFixed(1)}"`
+    + ` height="${H - PT - PB}" fill="var(--accent-soft)"/>`
+    + `<text x="${X((hs + he) / 2).toFixed(1)}" y="${H - PB - 5}" text-anchor="middle" font-size="9.5"`
+    + ` font-family="var(--mono)" fill="var(--accent)">${esc(fest.f.name)} 연휴</text>`;
+  [0, Math.round(mx / 2), Math.round(mx)].forEach(t => {
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--rule)"/>`
+      + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--ink-3)">${nf(t)}</text>`; });
+  g += `<polyline points="${rows.map((x, i) => `${X(i).toFixed(1)},${Y(x.a).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--ink-3)" stroke-width="1.8" stroke-dasharray="4 3"/>`
+    + `<polyline points="${rows.map((x, i) => `${X(i).toFixed(1)},${Y(x.p).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  rows.forEach((x, i) => {
+    if (x.r % 4 === 0) g += `<text x="${X(i).toFixed(1)}" y="${H - 15}" text-anchor="middle" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--ink-3)">D${x.r > 0 ? '+' : ''}${x.r}</text>`;
+    g += `<rect x="${(X(i) - iw / 2).toFixed(1)}" y="${PT}" width="${iw.toFixed(1)}" height="${H - PT - PB}"`
+      + ` fill="transparent"><title>D${x.r > 0 ? '+' : ''}${x.r} ${iso(x.d)}\n예측 ${nf(x.p)}건`
+      + `\n${M.festival.anchorName} 실적 ${nf(x.a)}건</title></rect>`;
+    if (x.r === fest.rel) g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(x.p).toFixed(1)}" r="4"`
+      + ` fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`;
+  });
+  return g + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--rule-2)"/></svg>`;
 }
 
-function forecastCSV(F){
-  const rows = F.forecast.map(f => ({
-    '상대일': 'D' + (f.rel > 0 ? '+' : '') + f.rel,
-    '날짜': f.date, '요일': dowOf(f.date), '연휴': f.holiday ? 'Y' : '',
-    '예측건수': f.pred, '하한': f.lo, '상한': f.hi,
-    '추석실적': F.chuseokActual[String(f.rel)].n,
-    '명절배수': f.uplift, '기대치': f.base
-  }));
-  return toCSV(rows, ['상대일','날짜','요일','연휴','예측건수','하한','상한','추석실적','명절배수','기대치']);
-}
+/* ── 렌더 ──────────────────────────────────────────────────────── */
+function render(){
+  const key = $('pd').value;
+  if (!key) return;
+  const d = parse(key), r = predict(d);
+  const inFest = !!r.fest;
+  const F = M.festival, bk = F.booking, ops = M.ops;
 
-function render(F){
-  const s = F.summary, li = F.leadIndicator, ops = F.chuseokOps;
-  const side = [
-    ['피크일 예측', nf(s.peakPred) + '건', `${s.peakDate}(${dowOf(s.peakDate)}) · 평시 ${s.peakMultiple}배`, 'attn'],
-    ['피크일 구간', `${nf(s.peakLo)}–${nf(s.peakHi)}`, `±${Math.round(F.band * 100)}% · 단일 표본 바닥값`, ''],
-    ['피크일 필요 인력', s.staffNeeded + '명', `1인 ${s.handlePerPersonDay}건/일 가정`, '']
-  ].map(([k, v, sub, cls]) =>
-    `<div class="fig"><div class="k">${k}</div><div class="v ${cls}" style="font-size:22px">${v}</div>`
-    + `<div class="s">${sub}</div></div>`).join('');
+  const decomp = r.parts.map(p =>
+    `<tr${p.off ? ' class="off"' : ''}><td>${esc(p.k)}<span class="why">${esc(p.why)}</span></td>`
+    + `<td class="op">${p.op}</td><td>${esc(p.v)}</td></tr>`).join('')
+    + `<tr class="res"><td>예측</td><td class="op">=</td><td>${nf(r.pred)} 건</td></tr>`;
 
-  const typeRows = F.types.map(t => `<tr>
-    <td>${esc(t.type)}</td><td class="n">${nf(t.chuseok)}</td><td class="n">${t.share}%</td>
-    <td class="n">${t.ratio === null ? '<span class="tag">명절 전용</span>' : t.ratio + '배'}</td>
-    <td class="n" style="color:var(--accent);font-weight:600">${nf(t.pred)}</td></tr>`).join('');
-  const deptRows = F.depts.map(d => `<tr><td>${esc(d.dept)}</td>
-    <td class="n">${d.share}%</td>
-    <td class="n" style="font-weight:600">${nf(d.pred)}</td></tr>`).join('');
+  const staff = Math.ceil(r.pred / ops.handlePerPersonDay);
 
-  $('body').innerHTML = `
-    <section class="sec" style="margin-top:28px">
-      <div class="sec-hd"><h2>예측 요약</h2><span class="sp"></span>
-        <span class="sub">${esc(F.anchors.chuseok)} 추석 실적 → ${esc(F.anchors.seollal)} 설 예측</span></div>
-      <p class="lede">추석 당일을 기준으로 상대일별 <b>명절 배수</b>를 뽑아 설 날짜에 투영했습니다.
-        설 승차권 예매가 연휴 약 1개월 전이라 <b>${esc(li.seollalBooking.window[0])} ~ ${esc(li.seollalBooking.window[1])}</b>
-        예매기 실적이 이미 데이터 안에 있고, 이것을 선행지표로 써서 증감률을 보정했습니다.</p>
-      <div class="hero">
-        <div>
-          <div class="big-k">설 연휴 예측 · D−21 ~ D+10</div>
-          <div class="big">${nf(s.totalPred)}</div>
-          <div class="big-s">추석 실적 ${nf(s.totalChuseok)}건 대비 <b>${s.deltaPct > 0 ? '+' : ''}${s.deltaPct}%</b></div>
-        </div>
-        <div class="side figs">${side}</div>
-      </div>
-      <div class="flag"><span class="dot" aria-hidden="true"></span>
-        <span><b>추석 기간 기한초과율 ${ops.overdueRate}% — 평시는 ${ops.normalOverdueRate}%였습니다.</b>
-        미완료율도 ${ops.openRate}%로 평시 ${ops.normalOpenRate}%를 크게 웃돌았습니다.
-        설에 같은 인력으로 대응하면 같은 일이 반복됩니다. 피크일 ${s.peakDate} 기준 ${s.staffNeeded}명이 필요합니다.</span></div>
-    </section>
+  let festBlock = '';
+  if (inFest){
+    const a = F.actual[String(r.fest.rel)];
+    const types = M.mix.festivalTypes.slice(0, 10).map(t => {
+      const nm = M.mix.normalTypes.find(x => x.k === t.k);
+      return `<tr><td>${esc(t.k)}</td><td class="n">${t.share}%</td>
+        <td class="n">${nm ? nm.share + '%' : '<span class="tag">명절 전용</span>'}</td>
+        <td class="n" style="color:var(--accent);font-weight:600">${nf(Math.round(r.pred * t.share / 100))}</td></tr>`;
+    }).join('');
+    const depts = M.mix.festivalDepts.slice(0, 6).map(x =>
+      `<tr><td>${esc(x.k)}</td><td class="n">${x.share}%</td>
+       <td class="n" style="font-weight:600">${nf(Math.round(r.pred * x.share / 100))}</td></tr>`).join('');
 
+    festBlock = `
     <section class="sec">
-      <div class="sec-hd"><h2>추석 실적 대비 설 예측</h2></div>
+      <div class="sec-hd"><h2>${esc(F.anchorName)} 실적 기반 투영</h2><span class="sp"></span>
+        <span class="sub">${esc(fdate(r))}</span></div>
+      <p class="lede">${r.fest.f.name === F.anchorName
+          ? `${esc(r.fest.f.dday.slice(0, 4))}년 ${esc(F.anchorName)}은 ${esc(F.anchorDate.slice(0, 4))}년 ${esc(F.anchorName)} 실적을 그대로 프로파일로 씁니다.`
+          : `${esc(r.fest.f.name)}은(는) ${esc(F.anchorName)}과 같은 명절이라 평시 모델 대신 <b>${esc(F.anchorName)} 상대일 프로파일</b>을 씁니다.`}
+        ${esc(F.anchorName)} 당일(${esc(F.anchorDate)}) 기준 D${r.fest.rel > 0 ? '+' : ''}${r.fest.rel} 의 실적
+        <b>${nf(a.n)}건</b>에서 뽑은 명절 배수를 이 날짜에 투영했습니다.</p>
       <div class="fc-wrap">
         <div class="plot">
-          <div class="legend"><span><i class="a"></i>추석 실적</span><span><i class="b"></i>설 예측</span>
-            <span><i class="c"></i>±${Math.round(F.band * 100)}% 구간</span></div>
-          ${svgChart(F)}
-          <p class="meth">D0 = 명절 당일 · 추석 ${esc(F.anchors.chuseok)}(금) → 설 ${esc(F.anchors.seollal)}(일)</p>
+          <div class="legend"><span><i class="a"></i>${esc(F.anchorName)} 실적</span>
+            <span><i class="b"></i>${esc(r.fest.f.name)} 예측</span></div>
+          ${festivalChart(r.fest)}
+          <p class="meth">D0 = 명절 당일 · ${esc(F.anchorName)} ${esc(F.anchorDate)} → ${esc(r.fest.f.name)} ${esc(r.fest.f.dday)}</p>
         </div>
-        <div class="basis"><h4>예측 근거</h4><table>
-          <tr><td>평시 기준선 · 추석 시점</td><td>${F.baseline.atChuseok} 건/일</td></tr>
-          <tr><td>평시 기준선 · 설 시점 (외삽)</td><td>${F.baseline.atSeollal} 건/일</td></tr>
-          <tr><td>추석 예매기 실적</td><td>${nf(li.chuseokBooking.n)}건 · ${li.chuseokBooking.lift}배</td></tr>
-          <tr><td>설 예매기 실적 <span class="tag">선행지표</span></td><td>${nf(li.seollalBooking.n)}건 · ${li.seollalBooking.lift}배</td></tr>
-          <tr class="eq"><td>수요 증감률</td><td>× ${li.growth}</td></tr></table>
-          <p>예매기 실적이 추석 대비 ${Math.round((li.growth - 1) * 100)}% 높게 나왔고,
-          이 비율을 추석 프로파일 전체에 곱했습니다. 평시 성장분은 기준선이 이미 흡수하므로
-          두 예매기를 각자의 기준선 대비 배수로 비교했습니다.</p>
+        <div class="basis"><h4>선행지표</h4><table>
+          <tr><td>${esc(F.anchorName)} 예매기</td><td>${nf(bk.anchor.n)}건 · ${bk.anchor.lift}배</td></tr>
+          <tr><td>설 예매기 <span class="tag">관측됨</span></td><td>${nf(bk.target.n)}건 · ${bk.target.lift}배</td></tr>
+          <tr class="eq"><td>수요 증감률</td><td>× ${bk.growth}</td></tr></table>
+          <p>${r.note === 'booking'
+            ? `설 승차권 예매는 연휴 약 1개월 전이라 ${esc(bk.target.window[0])} ~ ${esc(bk.target.window[1])} 실적이 데이터 안에 있습니다. 이 비율을 명절 배수에 곱했습니다.`
+            : `${esc(r.fest.f.name)} 예매기는 데이터 범위 밖이라 증감 보정 없이 ${esc(F.anchorName)} 프로파일만 적용했습니다. 그만큼 근거가 약합니다.`}</p>
         </div>
       </div>
-    </section>
-
-    <section class="sec">
-      <div class="sec-hd"><h2>일별 예측</h2><span class="sp"></span>
-        <span class="sub" id="dl-msg" aria-live="polite"></span>
-        <button class="btn btn-sm" id="btn-copy">CSV 복사</button>
-        <button class="btn btn-sm btn-go" id="btn-save">CSV 내려받기</button></div>
-      <div class="tscroll"><table class="daily"><thead><tr>
-        <th>상대일</th><th>설 날짜</th><th style="text-align:right">예측</th>
-        <th style="text-align:right">구간</th><th></th>
-        <th>추석 원본일</th><th style="text-align:right">추석 실적</th>
-        <th style="text-align:right">명절배수</th>
-      </tr></thead><tbody>${dailyRows(F)}</tbody></table></div>
-    </section>
-
-    <section class="sec">
-      <div class="sec-hd"><h2>유형·부서 배분</h2></div>
-      <div class="fc-wrap">
-        <div class="tscroll"><table class="daily" style="min-width:430px"><thead><tr>
-          <th>민원유형</th><th style="text-align:right">추석 실적</th><th style="text-align:right">추석 비중</th>
-          <th style="text-align:right">평시 대비</th><th style="text-align:right">설 예측</th>
-        </tr></thead><tbody>${typeRows}</tbody></table></div>
+      <div class="flag"><span class="dot" aria-hidden="true"></span>
+        <span><b>${esc(F.anchorName)} 기간 기한초과율 ${ops.festivalOverdue}% — 평시는 ${ops.normalOverdue}%였습니다.</b>
+        미완료율도 ${ops.festivalOpen}%로 평시 ${ops.normalOpen}%를 웃돌았습니다.
+        이 날짜 예측치 기준 <b>${staff}명</b>이 필요합니다 (1인 ${ops.handlePerPersonDay}건/일).</span></div>
+      <div class="fc-wrap" style="margin-top:24px">
+        <div class="tscroll"><table class="daily" style="min-width:400px"><thead><tr>
+          <th>민원유형</th><th style="text-align:right">명절 비중</th>
+          <th style="text-align:right">평시 비중</th><th style="text-align:right">예상 건수</th>
+        </tr></thead><tbody>${types}</tbody></table></div>
         <div class="tscroll"><table class="daily" style="min-width:230px"><thead><tr>
-          <th>처리부서</th><th style="text-align:right">비중</th><th style="text-align:right">설 예측</th>
-        </tr></thead><tbody>${deptRows}</tbody></table></div>
+          <th>처리부서</th><th style="text-align:right">비중</th><th style="text-align:right">예상 건수</th>
+        </tr></thead><tbody>${depts}</tbody></table></div>
+      </div>
+    </section>`;
+  }
+
+  $('out').innerHTML = `
+    <section class="sec">
+      <div class="sec-hd"><h2>예측 결과</h2><span class="sp"></span>
+        <span class="kind kind-${r.kindCls}">${esc(r.kind)}</span></div>
+      <div class="hero">
+        <div>
+          <div class="big-k">${esc(fdate(r))} 예상 접수</div>
+          <div class="big">${nf(r.pred)}</div>
+          <div class="big-s">구간 ${nf(r.lo)}–${nf(r.hi)} · 평시 기준선의 <b>${r.ratio.toFixed(2)}배</b></div>
+        </div>
+        <div class="side figs">
+          <div class="fig"><div class="k">필요 인력</div><div class="v" style="font-size:22px">${staff}명</div>
+            <div class="s">1인 ${ops.handlePerPersonDay}건/일 가정</div></div>
+          <div class="fig"><div class="k">±구간</div><div class="v" style="font-size:22px">±${Math.round(M.band * 100)}%</div>
+            <div class="s">평시 재현오차 ${M.validation.normalMape}% 포함</div></div>
+          <div class="fig"><div class="k">평시 기준선</div><div class="v" style="font-size:22px">${r.base.toFixed(0)}</div>
+            <div class="s">건/일 · 추세 외삽</div></div>
+        </div>
+      </div>
+      <div class="fc-wrap">
+        <div class="basis"><h4>계산 분해</h4><table class="decomp">${decomp}</table></div>
+        <div class="plot mini"><h3>선택일 전후 2주</h3>${miniChart(d)}
+          <p class="meth">짙은 막대가 선택일. 중간 농도는 명절 영향권.</p></div>
       </div>
     </section>
-
+    ${festBlock}
     <section class="sec">
-      <div class="sec-hd"><h2>이 예측의 한계</h2></div>
-      <ul class="notes">${F.caveats.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
-      <p class="meth">${esc(F.method)} · 산출 ${esc(F.generatedAt)} · tools/forecast.py</p>
+      <div class="sec-hd"><h2>모델과 한계</h2></div>
+      <div class="figs" style="margin-bottom:18px">
+        <div class="fig"><div class="k">학습 구간</div><div class="v" style="font-size:19px">${esc(M.source.from)}</div>
+          <div class="s">~ ${esc(M.source.to)} · ${nf(M.source.rows)}건</div></div>
+        <div class="fig"><div class="k">평시 관측</div><div class="v" style="font-size:19px">${nf(M.source.normalDays)}일</div>
+          <div class="s">명절·공휴일 영향권 제외</div></div>
+        <div class="fig"><div class="k">평시 재현오차</div><div class="v" style="font-size:19px">${M.validation.normalMape}%</div>
+          <div class="s">최악 ${esc(M.validation.worstDate)} ${M.validation.worstErrPct}%</div></div>
+        <div class="fig"><div class="k">명절 관측</div><div class="v attn" style="font-size:19px">1회</div>
+          <div class="s">${esc(M.festival.anchorName)}뿐 — 단일 표본</div></div>
+      </div>
+      <ul class="notes">${M.caveats.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      <p class="meth">${esc(M.method)}</p>
+      <p class="hint">예측은 <b>마스킹을 통과한 파일</b>만 입력으로 받습니다(잔존 검사 ${M.privacy.auditResiduals}건).
+        쓰는 컬럼은 ${M.privacy.columnsUsed.map(esc).join(' · ')} 이고
+        <b>제목·질문·답변 본문은 마스킹된 상태로도 읽지 않습니다.</b>
+        산출 ${esc(M.generatedAt)} · tools/forecast.py</p>
     </section>`;
-
-  const csv = forecastCSV(F);
-  const name = `설연휴_민원예측_${F.anchors.seollal.replace(/-/g, '')}.csv`;
-  $('btn-copy').onclick = e => copyText(csv, e.target, 'CSV 복사');
-  $('btn-save').onclick = async e => {
-    const btn = e.currentTarget, msg = $('dl-msg');
-    btn.disabled = true; msg.textContent = '';
-    try { msg.textContent = await saveFile(name, csv); }
-    catch (err) { msg.textContent = saveError(err); }
-    finally { btn.disabled = false; }
-  };
+}
+function fdate(r){
+  const d = parse($('pd').value);
+  return `${$('pd').value} (${DW[wd(d)]})`;
 }
 
+/* ── 부트 ──────────────────────────────────────────────────────── */
 (async function boot(){
-  const F = await loadJSON('data/forecast.json');
-  if (!F){
-    $('src').textContent = 'data/forecast.json 을 불러오지 못했습니다';
-    $('body').innerHTML = `<section class="sec" style="margin-top:28px">
-      <div class="sec-hd"><h2>예측 요약</h2></div>
-      <p class="empty-note">예측 결과가 없습니다.
-      <code>python3 tools/forecast.py -i data/masked_seasonal.csv -o data/forecast.json</code> 을 실행해 생성해 주세요.</p>
+  M = await loadJSON('data/model.json');
+  if (!M){
+    $('src').textContent = 'data/model.json 을 불러오지 못했습니다';
+    $('out').innerHTML = `<section class="sec" style="margin-top:28px">
+      <p class="empty-note">예측 모델이 없습니다.
+      <code>python3 tools/forecast.py -i data/masked_seasonal.csv -o data/model.json</code> 을 실행해 생성해 주세요.</p>
       </section>`;
     return;
   }
-  $('src').innerHTML = `원본 <b>${nf(F.source.rows)}</b>행 · ${esc(F.source.from)} — ${esc(F.source.to)}`;
-  render(F);
+  M.holidays.forEach(h => { HOL[h.date] = h.name; });
+  FESTS = M.festivals;
+  buildCatchup();
+
+  D_MIN = iso(addDays(parse(M.source.to), 1));
+  const pd = $('pd');
+  pd.min = D_MIN; pd.max = D_MAX;
+  $('range-hint').textContent = `선택 가능 ${D_MIN} ~ ${D_MAX}`;
+  $('src').innerHTML = `학습 <b>${nf(M.source.rows)}</b>건 · ${esc(M.source.from)} — ${esc(M.source.to)}`;
+  $('lede').innerHTML = `데이터가 들어온 마지막 날(<b>${esc(M.source.to)}</b>) 이후 날짜를 고르면
+    그날의 <b>요일·시기·공휴일</b>을 반영해 접수량을 예측합니다.
+    설·추석처럼 명절 구간에 드는 날짜는 평시 모델 대신
+    같은 명절인 <b>${esc(M.festival.anchorName)}의 실적</b>을 기준으로 투영합니다.`;
+
+  const picks = [];
+  FESTS.forEach(f => picks.push([f.name + ' 당일', f.dday]));
+  picks.push(['설 연휴 전날', '2027-02-05'], ['삼일절', '2027-03-01'],
+             ['삼일절 다음날', '2027-03-02'], ['평범한 화요일', '2027-04-13']);
+  $('jump').innerHTML = picks.filter(([, v]) => v >= D_MIN && v <= D_MAX)
+    .map(([k, v]) => `<button class="btn btn-sm" data-d="${v}">${esc(k)}</button>`).join('');
+  $('jump').addEventListener('click', e => {
+    const b = e.target.closest('button[data-d]');
+    if (b){ $('pd').value = b.dataset.d; render(); }
+  });
+
+  pd.value = FESTS[0] ? FESTS[0].dday : D_MIN;
+  pd.onchange = render;
+  render();
 })();
 </script>

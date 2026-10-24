@@ -63,6 +63,28 @@ PHASE_WINDOW = {           # 국면별 명절특화 유형 비중
     "예매": 0.72, "운행": 0.80, "사후": 0.62, "평시": 0.0,
 }
 
+# ── 일반 공휴일 ───────────────────────────────────────────────────────
+#  공휴일에는 고객센터가 쉬고 처리 인력도 없어 '접수'가 줄고,
+#  다음 영업일에 밀린 건이 한꺼번에 들어온다. 명절 연휴와는 반대 방향의 패턴이다.
+PUBLIC_HOLIDAYS = [
+    date(2026, 10, 3),    # 개천절(토)
+    date(2026, 10, 9),    # 한글날(금)
+    date(2026, 12, 25),   # 성탄절(금)
+    date(2027, 1, 1),     # 신정(금)
+]
+HOLIDAY_MULT = 0.42       # 공휴일 당일 접수 감소
+CATCHUP_MULT = 1.34       # 다음 영업일 적체 해소
+
+
+def _next_business_day(d: date) -> date:
+    n = d + timedelta(days=1)
+    while n.weekday() >= 5 or n in PUBLIC_HOLIDAYS:
+        n += timedelta(days=1)
+    return n
+
+
+CATCHUP_DAYS = {_next_business_day(h) for h in PUBLIC_HOLIDAYS}
+
 # ── 공통 사전 ─────────────────────────────────────────────────────────
 유입경로 = ["홈페이지", "모바일앱", "고객센터", "역사접수", "국민신문고", "이메일"]
 고객요구유형 = ["환불요청", "개선요청", "설명요구", "사과요구", "정보문의", "재발방지"]
@@ -274,6 +296,11 @@ def daily_count(d: date, rnd: random.Random):
     # 연휴 당일은 주말 계수를 상쇄한다 (명절은 요일과 무관하게 사람이 움직인다)
     if CHUSEOK_HOLIDAY[0] <= d <= CHUSEOK_HOLIDAY[1] and d.weekday() >= 5:
         n /= DOW[d.weekday()]
+    # 일반 공휴일: 당일 접수 감소 → 다음 영업일 적체 해소
+    if d in PUBLIC_HOLIDAYS:
+        n *= HOLIDAY_MULT
+    elif d in CATCHUP_DAYS:
+        n *= CATCHUP_MULT
     return max(1, int(round(n * rnd.uniform(0.88, 1.12)))), phase
 
 

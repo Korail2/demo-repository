@@ -257,3 +257,25 @@ table.hist{width:100%;min-width:600px;border-collapse:collapse;font-size:11.5px}
   vertical-align:middle}
 .spark i{display:block;height:100%;background:var(--accent);border-radius:2px}
 .empty-note{padding:40px 0;color:var(--ink-3);font-size:13px}
+
+/* ── 날짜 선택 예측 페이지 ───────────────────────────────────────── */
+.pick{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.pick .f{min-width:0}
+.pick input[type=date]{min-width:170px;font-size:14px;padding:8px 10px}
+.jump{display:flex;gap:2px;flex-wrap:wrap}
+.kind{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;font-size:11.5px;
+  font-weight:500;white-space:nowrap;border:1px solid transparent}
+.kind-plain{background:var(--sunk);color:var(--ink-2);border-color:var(--rule-2)}
+.kind-week{background:var(--sunk);color:var(--ink-3);border-color:var(--rule-2)}
+.kind-holi{background:var(--attn-soft);color:var(--attn);border-color:var(--attn-line)}
+.kind-fest{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.decomp{width:100%;min-width:300px;border-collapse:collapse;font-size:12.5px}
+.decomp td{padding:7px 0;border-bottom:1px solid var(--rule)}
+.decomp td:first-child{color:var(--ink-2)}
+.decomp td.op{width:28px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:11px}
+.decomp td:last-child{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.decomp tr.off td{color:var(--ink-3)}
+.decomp tr.res td{border-bottom:0;border-top:1px solid var(--rule-2);font-weight:700;padding-top:9px}
+.decomp tr.res td:last-child{color:var(--accent);font-size:15px}
+.decomp .why{display:block;font-size:11px;color:var(--ink-3);font-weight:400;margin-top:1px}
+.mini svg{display:block;width:100%;height:auto;max-width:100%;overflow:visible}
