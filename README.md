@@ -4,7 +4,14 @@
 서버 없이 GitHub Pages 로 배포된다.
 
 ```
-index.html              조회 화면 (의존성 없는 단일 HTML)
+index.html              조회·다운로드 페이지   (빌드 산출물 — 직접 고치지 말 것)
+forecast.html           설 연휴 예측 페이지    (빌드 산출물 — 직접 고치지 말 것)
+src/
+  console.html          조회 페이지 소스 (아티팩트용 조각)
+  forecast.html         예측 페이지 소스 (아티팩트용 조각)
+assets/
+  console.css           두 페이지 공유 스타일
+  common.js             두 페이지 공유 유틸 (CSV 파서, 저장, 이력, 상태 판정)
 data/
   masked_seasonal.csv   마스킹 완료 데이터 — 이 폴더에는 audit 0건인 파일만 둔다
   forecast.json         추석 실적 기반 설 연휴 예측 결과
@@ -12,8 +19,33 @@ tools/
   pii_mask.py           마스킹 엔진 + 테이블 파이프라인 (표준 라이브러리만)
   make_seasonal.py      계절성 더미데이터 생성기
   forecast.py           추석 → 설 예측 모듈
+  build.py              src/ 조각 → 정적 호스팅용 완전한 HTML
   MASKING_POLICY.md     마스킹 기준 (T1/T2/T3 분류, 우선순위, 운영 게이트)
 ```
+
+### 페이지 분리
+
+| 페이지 | 하는 일 | 받는 데이터 |
+|---|---|---|
+| `index.html` | 기간·유형별 조회, 조회분만 CSV 다운로드, 상세 열람 | `data/masked_seasonal.csv` (6.5MB) |
+| `forecast.html` | 추석 실적 기반 설 연휴 예측, 일별 예측표 CSV | `data/forecast.json` (13KB) |
+
+예측 페이지는 원본 CSV를 받지 않는다. 집계가 끝난 JSON만 읽으므로
+**6.5MB 대신 13KB로 열린다.** 두 페이지는 `assets/` 를 공유해 중복이 없다.
+
+### 화면을 고칠 때
+
+`index.html` / `forecast.html` 은 빌드 산출물이다. **`src/` 를 고치고 다시 빌드한다.**
+
+```bash
+python3 tools/build.py src/console.html  index.html
+python3 tools/build.py src/forecast.html forecast.html
+```
+
+`src/` 조각에는 `<!doctype>` 와 `<head>` 가 없다. claude.ai 아티팩트는 발행 시
+플랫폼이 그 부분을 붙여주지만 GitHub Pages 에는 아무것도 붙지 않기 때문에
+`build.py` 가 그 차이를 메운다. **이 단계를 건너뛰면 charset 선언이 없어
+JavaScript 안의 한글 컬럼명이 깨지고 표가 통째로 빈다.**
 
 ---
 

@@ -20,6 +20,7 @@ build.py — 화면 소스를 정적 호스팅용 완전한 HTML 문서로 감�
 """
 from __future__ import annotations
 
+import re
 import sys
 
 HEAD = '''<!doctype html>
@@ -41,12 +42,38 @@ img{max-width:100%}
 TAIL = '\n</body>\n</html>\n'
 
 
+# head 에 들어가는 요소들. 이 줄들이 이어지는 동안이 prelude 이고,
+# 그 외 태그가 처음 나오는 지점부터 body 다.
+# (CSS 를 외부 파일로 빼면 </style> 이 없으므로 그걸 기준으로 자를 수 없다)
+_HEAD_LINE = re.compile(r"^\s*(?:<title[ >]|</title>|<meta[ >]|<link[ >]|<style[ >]|</style>|$)", re.I)
+
+
+def split_head(src: str) -> int:
+    """head prelude 가 끝나는 문자 인덱스를 돌려준다."""
+    pos, in_style = 0, False
+    for line in src.splitlines(keepends=True):
+        stripped = line.strip().lower()
+        if in_style:
+            pos += len(line)
+            if "</style>" in stripped:
+                in_style = False
+            continue
+        if not _HEAD_LINE.match(line):
+            break
+        if stripped.startswith("<style") and "</style>" not in stripped:
+            in_style = True
+        pos += len(line)
+    if pos == 0:
+        sys.exit("head 로 보낼 요소(<title>/<meta>/<link>/<style>)를 찾지 못했습니다.")
+    return pos
+
+
 def build(src_path: str, out_path: str) -> None:
     src = open(src_path, encoding="utf-8").read()
     if src.lstrip().lower().startswith("<!doctype"):
         sys.exit(f"{src_path} 는 이미 완전한 문서입니다. 아티팩트용 조각을 입력으로 주세요.")
-    i = src.index("</style>") + len("</style>")
-    out = HEAD + src[:i] + "\n</head>\n<body>" + src[i:] + TAIL
+    i = split_head(src)
+    out = HEAD + src[:i].rstrip() + "\n</head>\n<body>\n" + src[i:].lstrip("\n") + TAIL
     open(out_path, "w", encoding="utf-8").write(out)
 
     need = ["<!doctype html>", '<meta charset="utf-8">', "viewport-fit=cover",

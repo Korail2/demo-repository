@@ -1,0 +1,223 @@
+<title>설 연휴 민원 예측</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="assets/console.css">
+
+<header class="bar">
+  <div class="bar-in">
+    <h1>민원 조회 콘솔</h1>
+    <nav class="nav">
+      <a href="index.html">조회·다운로드</a>
+      <a href="forecast.html" aria-current="page">설 예측</a>
+    </nav>
+    <span class="sp"></span>
+    <span class="src" id="src">예측 결과 불러오는 중…</span>
+  </div>
+</header>
+
+<div class="shell">
+  <div id="body">
+    <section class="sec" style="margin-top:28px">
+      <div class="sec-hd"><h2>예측 요약</h2></div>
+      <div class="sk"></div><div class="sk"></div><div class="sk"></div>
+    </section>
+  </div>
+</div>
+
+<script src="assets/common.js"></script>
+<script>
+'use strict';
+
+function svgChart(F){
+  const fc = F.forecast, s = F.summary;
+  const W = 700, H = 216, PL = 38, PR = 12, PT = 20, PB = 34;
+  const n = fc.length, iw = (W - PL - PR) / (n - 1);
+  const act = fc.map(f => F.chuseokActual[String(f.rel)].n);
+  const yMax = Math.max(...fc.map(f => f.hi), ...act) * 1.06;
+  const X = i => PL + i * iw, Y = v => PT + (H - PT - PB) * (1 - v / yMax);
+  const hs = fc.findIndex(f => f.holiday), he = fc.map(f => f.holiday).lastIndexOf(true);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="추석 실적과 설 예측 비교">`;
+  if (hs >= 0) g += `<rect x="${(X(hs) - iw / 2).toFixed(1)}" y="${PT}" width="${((he - hs + 1) * iw).toFixed(1)}"`
+    + ` height="${H - PT - PB}" fill="var(--accent-soft)"/>`
+    + `<text x="${X((hs + he) / 2).toFixed(1)}" y="${H - PB - 5}" text-anchor="middle" font-size="9.5"`
+    + ` font-family="var(--mono)" fill="var(--accent)">설 연휴</text>`;
+  [0, Math.round(yMax / 2), Math.round(yMax)].forEach(t => {
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--rule)"/>`
+      + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--ink-3)">${nf(t)}</text>`; });
+  g += `<path d="M${fc.map((f, i) => `${X(i).toFixed(1)},${Y(f.hi).toFixed(1)}`).join(' L')}`
+    + ` L${fc.slice().reverse().map((f, i) => `${X(n - 1 - i).toFixed(1)},${Y(f.lo).toFixed(1)}`).join(' L')} Z"`
+    + ` fill="var(--accent)" opacity=".13"/>`;
+  g += `<polyline points="${act.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--ink-3)" stroke-width="1.8" stroke-dasharray="4 3"/>`;
+  g += `<polyline points="${fc.map((f, i) => `${X(i).toFixed(1)},${Y(f.pred).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  fc.forEach((f, i) => {
+    if (f.holiday) g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(f.pred).toFixed(1)}" r="3.4"`
+      + ` fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>`;
+    if (f.rel % 4 === 0) g += `<text x="${X(i).toFixed(1)}" y="${H - 17}" text-anchor="middle" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--ink-3)">D${f.rel > 0 ? '+' : ''}${f.rel}</text>`;
+    g += `<rect x="${(X(i) - iw / 2).toFixed(1)}" y="${PT}" width="${iw.toFixed(1)}" height="${H - PT - PB}"`
+      + ` fill="transparent"><title>D${f.rel > 0 ? '+' : ''}${f.rel} ${f.date}\n설 예측 ${nf(f.pred)}건 (${nf(f.lo)}~${nf(f.hi)})`
+      + `\n추석 실적 ${nf(act[i])}건 · 명절배수 ${f.uplift}배</title></rect>`;
+  });
+  const pi = fc.findIndex(f => f.date === s.peakDate);
+  g += `<text x="${X(pi).toFixed(1)}" y="${(Y(s.peakPred) - 9).toFixed(1)}" text-anchor="middle" font-size="11"`
+    + ` font-weight="600" font-family="var(--mono)" fill="var(--accent)">${nf(s.peakPred)}</text>`
+    + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--rule-2)"/></svg>`;
+  return g;
+}
+
+function dailyRows(F){
+  const mx = Math.max(...F.forecast.map(f => f.hi));
+  return F.forecast.map(f => {
+    const a = F.chuseokActual[String(f.rel)];
+    const cls = [f.holiday ? 'hol' : '', f.date === F.summary.peakDate ? 'peak' : ''].filter(Boolean).join(' ');
+    // 추석 원본일의 요일을 같이 보여준다. 두 명절은 요일이 2일 어긋나므로
+    // 원시 건수를 직접 비교하면(예: 토요일 39건 vs 월요일 예측 106건) 오해를 부른다.
+    // 요일이 보정된 비교는 '명절배수' 열이 담당한다.
+    const sameDow = dowOf(f.date) === dowOf(a.date);
+    return `<tr class="${cls}">
+      <td class="m">D${f.rel > 0 ? '+' : ''}${f.rel}</td>
+      <td class="m">${f.date}<span class="wk"> (${dowOf(f.date)})</span></td>
+      <td class="n">${nf(f.pred)}</td>
+      <td class="n wk">${nf(f.lo)}–${nf(f.hi)}</td>
+      <td><span class="spark"><i style="width:${(f.pred / mx * 100).toFixed(1)}%"></i></span></td>
+      <td class="m wk">${a.date}<span style="opacity:${sameDow ? 1 : .55}"> (${dowOf(a.date)})</span></td>
+      <td class="n wk">${nf(a.n)}</td>
+      <td class="n">${f.uplift}배</td></tr>`;
+  }).join('');
+}
+
+function forecastCSV(F){
+  const rows = F.forecast.map(f => ({
+    '상대일': 'D' + (f.rel > 0 ? '+' : '') + f.rel,
+    '날짜': f.date, '요일': dowOf(f.date), '연휴': f.holiday ? 'Y' : '',
+    '예측건수': f.pred, '하한': f.lo, '상한': f.hi,
+    '추석실적': F.chuseokActual[String(f.rel)].n,
+    '명절배수': f.uplift, '기대치': f.base
+  }));
+  return toCSV(rows, ['상대일','날짜','요일','연휴','예측건수','하한','상한','추석실적','명절배수','기대치']);
+}
+
+function render(F){
+  const s = F.summary, li = F.leadIndicator, ops = F.chuseokOps;
+  const side = [
+    ['피크일 예측', nf(s.peakPred) + '건', `${s.peakDate}(${dowOf(s.peakDate)}) · 평시 ${s.peakMultiple}배`, 'attn'],
+    ['피크일 구간', `${nf(s.peakLo)}–${nf(s.peakHi)}`, `±${Math.round(F.band * 100)}% · 단일 표본 바닥값`, ''],
+    ['피크일 필요 인력', s.staffNeeded + '명', `1인 ${s.handlePerPersonDay}건/일 가정`, '']
+  ].map(([k, v, sub, cls]) =>
+    `<div class="fig"><div class="k">${k}</div><div class="v ${cls}" style="font-size:22px">${v}</div>`
+    + `<div class="s">${sub}</div></div>`).join('');
+
+  const typeRows = F.types.map(t => `<tr>
+    <td>${esc(t.type)}</td><td class="n">${nf(t.chuseok)}</td><td class="n">${t.share}%</td>
+    <td class="n">${t.ratio === null ? '<span class="tag">명절 전용</span>' : t.ratio + '배'}</td>
+    <td class="n" style="color:var(--accent);font-weight:600">${nf(t.pred)}</td></tr>`).join('');
+  const deptRows = F.depts.map(d => `<tr><td>${esc(d.dept)}</td>
+    <td class="n">${d.share}%</td>
+    <td class="n" style="font-weight:600">${nf(d.pred)}</td></tr>`).join('');
+
+  $('body').innerHTML = `
+    <section class="sec" style="margin-top:28px">
+      <div class="sec-hd"><h2>예측 요약</h2><span class="sp"></span>
+        <span class="sub">${esc(F.anchors.chuseok)} 추석 실적 → ${esc(F.anchors.seollal)} 설 예측</span></div>
+      <p class="lede">추석 당일을 기준으로 상대일별 <b>명절 배수</b>를 뽑아 설 날짜에 투영했습니다.
+        설 승차권 예매가 연휴 약 1개월 전이라 <b>${esc(li.seollalBooking.window[0])} ~ ${esc(li.seollalBooking.window[1])}</b>
+        예매기 실적이 이미 데이터 안에 있고, 이것을 선행지표로 써서 증감률을 보정했습니다.</p>
+      <div class="hero">
+        <div>
+          <div class="big-k">설 연휴 예측 · D−21 ~ D+10</div>
+          <div class="big">${nf(s.totalPred)}</div>
+          <div class="big-s">추석 실적 ${nf(s.totalChuseok)}건 대비 <b>${s.deltaPct > 0 ? '+' : ''}${s.deltaPct}%</b></div>
+        </div>
+        <div class="side figs">${side}</div>
+      </div>
+      <div class="flag"><span class="dot" aria-hidden="true"></span>
+        <span><b>추석 기간 기한초과율 ${ops.overdueRate}% — 평시는 ${ops.normalOverdueRate}%였습니다.</b>
+        미완료율도 ${ops.openRate}%로 평시 ${ops.normalOpenRate}%를 크게 웃돌았습니다.
+        설에 같은 인력으로 대응하면 같은 일이 반복됩니다. 피크일 ${s.peakDate} 기준 ${s.staffNeeded}명이 필요합니다.</span></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-hd"><h2>추석 실적 대비 설 예측</h2></div>
+      <div class="fc-wrap">
+        <div class="plot">
+          <div class="legend"><span><i class="a"></i>추석 실적</span><span><i class="b"></i>설 예측</span>
+            <span><i class="c"></i>±${Math.round(F.band * 100)}% 구간</span></div>
+          ${svgChart(F)}
+          <p class="meth">D0 = 명절 당일 · 추석 ${esc(F.anchors.chuseok)}(금) → 설 ${esc(F.anchors.seollal)}(일)</p>
+        </div>
+        <div class="basis"><h4>예측 근거</h4><table>
+          <tr><td>평시 기준선 · 추석 시점</td><td>${F.baseline.atChuseok} 건/일</td></tr>
+          <tr><td>평시 기준선 · 설 시점 (외삽)</td><td>${F.baseline.atSeollal} 건/일</td></tr>
+          <tr><td>추석 예매기 실적</td><td>${nf(li.chuseokBooking.n)}건 · ${li.chuseokBooking.lift}배</td></tr>
+          <tr><td>설 예매기 실적 <span class="tag">선행지표</span></td><td>${nf(li.seollalBooking.n)}건 · ${li.seollalBooking.lift}배</td></tr>
+          <tr class="eq"><td>수요 증감률</td><td>× ${li.growth}</td></tr></table>
+          <p>예매기 실적이 추석 대비 ${Math.round((li.growth - 1) * 100)}% 높게 나왔고,
+          이 비율을 추석 프로파일 전체에 곱했습니다. 평시 성장분은 기준선이 이미 흡수하므로
+          두 예매기를 각자의 기준선 대비 배수로 비교했습니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-hd"><h2>일별 예측</h2><span class="sp"></span>
+        <span class="sub" id="dl-msg" aria-live="polite"></span>
+        <button class="btn btn-sm" id="btn-copy">CSV 복사</button>
+        <button class="btn btn-sm btn-go" id="btn-save">CSV 내려받기</button></div>
+      <div class="tscroll"><table class="daily"><thead><tr>
+        <th>상대일</th><th>설 날짜</th><th style="text-align:right">예측</th>
+        <th style="text-align:right">구간</th><th></th>
+        <th>추석 원본일</th><th style="text-align:right">추석 실적</th>
+        <th style="text-align:right">명절배수</th>
+      </tr></thead><tbody>${dailyRows(F)}</tbody></table></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-hd"><h2>유형·부서 배분</h2></div>
+      <div class="fc-wrap">
+        <div class="tscroll"><table class="daily" style="min-width:430px"><thead><tr>
+          <th>민원유형</th><th style="text-align:right">추석 실적</th><th style="text-align:right">추석 비중</th>
+          <th style="text-align:right">평시 대비</th><th style="text-align:right">설 예측</th>
+        </tr></thead><tbody>${typeRows}</tbody></table></div>
+        <div class="tscroll"><table class="daily" style="min-width:230px"><thead><tr>
+          <th>처리부서</th><th style="text-align:right">비중</th><th style="text-align:right">설 예측</th>
+        </tr></thead><tbody>${deptRows}</tbody></table></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-hd"><h2>이 예측의 한계</h2></div>
+      <ul class="notes">${F.caveats.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      <p class="meth">${esc(F.method)} · 산출 ${esc(F.generatedAt)} · tools/forecast.py</p>
+    </section>`;
+
+  const csv = forecastCSV(F);
+  const name = `설연휴_민원예측_${F.anchors.seollal.replace(/-/g, '')}.csv`;
+  $('btn-copy').onclick = e => copyText(csv, e.target, 'CSV 복사');
+  $('btn-save').onclick = async e => {
+    const btn = e.currentTarget, msg = $('dl-msg');
+    btn.disabled = true; msg.textContent = '';
+    try { msg.textContent = await saveFile(name, csv); }
+    catch (err) { msg.textContent = saveError(err); }
+    finally { btn.disabled = false; }
+  };
+}
+
+(async function boot(){
+  const F = await loadJSON('data/forecast.json');
+  if (!F){
+    $('src').textContent = 'data/forecast.json 을 불러오지 못했습니다';
+    $('body').innerHTML = `<section class="sec" style="margin-top:28px">
+      <div class="sec-hd"><h2>예측 요약</h2></div>
+      <p class="empty-note">예측 결과가 없습니다.
+      <code>python3 tools/forecast.py -i data/masked_seasonal.csv -o data/forecast.json</code> 을 실행해 생성해 주세요.</p>
+      </section>`;
+    return;
+  }
+  $('src').innerHTML = `원본 <b>${nf(F.source.rows)}</b>행 · ${esc(F.source.from)} — ${esc(F.source.to)}`;
+  render(F);
+})();
+</script>
