@@ -163,9 +163,6 @@ input[type=date]{font-family:var(--mono);font-size:12px;min-width:118px}
 .quick button:hover{background:var(--surface-3);color:var(--text)}
 .quick button[aria-pressed=true]{background:var(--brand-50);border-color:var(--brand-line);
   color:var(--brand);font-weight:600}
-.warn-line{margin-top:13px;padding:9px 12px;border-radius:var(--r-sm);background:var(--warn-bg);
-  border:1px solid var(--warn-line);font-size:12px;color:var(--warn);display:flex;gap:8px}
-.warn-line b{font-weight:700}
 
 /* ── 지표 타일 ─────────────────────────────────────────────────── */
 .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:1px;background:var(--border);
@@ -205,24 +202,24 @@ input[type=date]{font-family:var(--mono);font-size:12px;min-width:118px}
 /* ── 표 ────────────────────────────────────────────────────────── */
 .tscroll{overflow-x:auto}
 table.grid,table.hist,table.daily{border-collapse:collapse;width:100%}
-table.grid{min-width:880px}
+table.grid{min-width:720px}
 table.hist{min-width:600px}
 table.daily{min-width:600px}
 .grid thead th,.hist th,.daily th{position:sticky;top:0;z-index:5;background:var(--surface-3);
-  padding:8px 12px;text-align:left;font-size:10.5px;font-weight:600;color:var(--text-2);
+  padding:8px 9px;text-align:left;font-size:10.5px;font-weight:600;color:var(--text-2);
   letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
   box-shadow:inset 0 -1px 0 var(--border-2)}
 .hist th,.daily th{position:static}
 .grid thead th.so{cursor:pointer;user-select:none}
 .grid thead th.so:hover{color:var(--brand)}
 .grid thead th .ar{color:var(--brand);font-size:9px;margin-left:3px}
-.grid tbody td,.hist td,.daily td{padding:9px 12px;border-bottom:1px solid var(--border);
+.grid tbody td,.hist td,.daily td{padding:9px 9px;border-bottom:1px solid var(--border);
   vertical-align:baseline;font-size:12.5px}
 .hist td,.daily td{font-size:12px}
 .grid tbody tr{cursor:pointer}
 .grid tbody tr:hover td{background:var(--brand-50)}
 td.m{font-family:var(--mono);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text-2)}
-td.ti{max-width:400px;min-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.ti{max-width:230px;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 td.nw{white-space:nowrap}
 .daily .n,.hist .n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .daily .wk{color:var(--text-3)}
@@ -363,3 +360,17 @@ td.nw{white-space:nowrap}
   background-size:200% 100%;animation:sh 1.4s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ── 2단 배치: 좌측 조회 결과 / 우측 요약 ────────────────────────
+   표가 넓으므로 우측 요약 폭을 고정하고 좌측이 남는 폭을 전부 갖는다.
+   좁은 화면에서는 결과 → 요약 순으로 쌓인다. */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 332px;gap:18px;align-items:start}
+@media (max-width:1140px){.cols{grid-template-columns:1fr}}
+.cols>.card{min-width:0}
+/* 우측 요약 컬럼은 차트를 세로로 쌓는다 */
+.stackplots{display:grid}
+.stackplots>*{min-width:0;padding:14px 16px}
+.stackplots>*+*{border-top:1px solid var(--border)}
+/* 우측 요약의 지표 타일은 2열 고정. 홀수 개일 때 마지막 타일이 빈칸을 남기지 않게 한다 */
+.cols>.card .figs{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols>.card .figs .fig:last-child{grid-column:1/-1}
