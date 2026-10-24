@@ -1,0 +1,792 @@
+{
+ "generatedAt": "2026-10-24 11:35:28",
+ "method": "상대일 프로파일 투영 (추석 실적 → 설 예측). 머신러닝 아님.",
+ "source": {
+  "file": "masked_seasonal.csv",
+  "rows": 11466,
+  "from": "2026-09-01",
+  "to": "2027-01-31"
+ },
+ "anchors": {
+  "chuseok": "2026-09-25",
+  "chuseokHoliday": [
+   "2026-09-24",
+   "2026-09-27"
+  ],
+  "seollal": "2027-02-07",
+  "seollalHoliday": [
+   "2027-02-06",
+   "2027-02-09"
+  ]
+ },
+ "baseline": {
+  "atChuseok": 53.1,
+  "atSeollal": 55.7,
+  "slopePerDay": 0.019,
+  "dowFactor": {
+   "0": 1.37,
+   "1": 1.18,
+   "2": 1.14,
+   "3": 1.04,
+   "4": 1.11,
+   "5": 0.64,
+   "6": 0.49
+  }
+ },
+ "leadIndicator": {
+  "chuseokBooking": {
+   "window": [
+    "2026-09-06",
+    "2026-09-12"
+   ],
+   "n": 887,
+   "lift": 2.4
+  },
+  "seollalBooking": {
+   "window": [
+    "2027-01-03",
+    "2027-01-09"
+   ],
+   "n": 1105,
+   "lift": 2.87
+  },
+  "growth": 1.195
+ },
+ "band": 0.22,
+ "chuseokActual": {
+  "-21": {
+   "date": "2026-09-04",
+   "dow": 4,
+   "n": 58
+  },
+  "-20": {
+   "date": "2026-09-05",
+   "dow": 5,
+   "n": 39
+  },
+  "-19": {
+   "date": "2026-09-06",
+   "dow": 6,
+   "n": 38
+  },
+  "-18": {
+   "date": "2026-09-07",
+   "dow": 0,
+   "n": 154
+  },
+  "-17": {
+   "date": "2026-09-08",
+   "dow": 1,
+   "n": 166
+  },
+  "-16": {
+   "date": "2026-09-09",
+   "dow": 2,
+   "n": 189
+  },
+  "-15": {
+   "date": "2026-09-10",
+   "dow": 3,
+   "n": 160
+  },
+  "-14": {
+   "date": "2026-09-11",
+   "dow": 4,
+   "n": 126
+  },
+  "-13": {
+   "date": "2026-09-12",
+   "dow": 5,
+   "n": 54
+  },
+  "-12": {
+   "date": "2026-09-13",
+   "dow": 6,
+   "n": 30
+  },
+  "-11": {
+   "date": "2026-09-14",
+   "dow": 0,
+   "n": 78
+  },
+  "-10": {
+   "date": "2026-09-15",
+   "dow": 1,
+   "n": 57
+  },
+  "-9": {
+   "date": "2026-09-16",
+   "dow": 2,
+   "n": 52
+  },
+  "-8": {
+   "date": "2026-09-17",
+   "dow": 3,
+   "n": 50
+  },
+  "-7": {
+   "date": "2026-09-18",
+   "dow": 4,
+   "n": 61
+  },
+  "-6": {
+   "date": "2026-09-19",
+   "dow": 5,
+   "n": 42
+  },
+  "-5": {
+   "date": "2026-09-20",
+   "dow": 6,
+   "n": 44
+  },
+  "-4": {
+   "date": "2026-09-21",
+   "dow": 0,
+   "n": 153
+  },
+  "-3": {
+   "date": "2026-09-22",
+   "dow": 1,
+   "n": 184
+  },
+  "-2": {
+   "date": "2026-09-23",
+   "dow": 2,
+   "n": 239
+  },
+  "-1": {
+   "date": "2026-09-24",
+   "dow": 3,
+   "n": 280
+  },
+  "0": {
+   "date": "2026-09-25",
+   "dow": 4,
+   "n": 300
+  },
+  "1": {
+   "date": "2026-09-26",
+   "dow": 5,
+   "n": 232
+  },
+  "2": {
+   "date": "2026-09-27",
+   "dow": 6,
+   "n": 187
+  },
+  "3": {
+   "date": "2026-09-28",
+   "dow": 0,
+   "n": 204
+  },
+  "4": {
+   "date": "2026-09-29",
+   "dow": 1,
+   "n": 150
+  },
+  "5": {
+   "date": "2026-09-30",
+   "dow": 2,
+   "n": 153
+  },
+  "6": {
+   "date": "2026-10-01",
+   "dow": 3,
+   "n": 120
+  },
+  "7": {
+   "date": "2026-10-02",
+   "dow": 4,
+   "n": 108
+  },
+  "8": {
+   "date": "2026-10-03",
+   "dow": 5,
+   "n": 51
+  },
+  "9": {
+   "date": "2026-10-04",
+   "dow": 6,
+   "n": 35
+  },
+  "10": {
+   "date": "2026-10-05",
+   "dow": 0,
+   "n": 80
+  }
+ },
+ "forecast": [
+  {
+   "rel": -21,
+   "date": "2027-01-17",
+   "dow": 6,
+   "pred": 33,
+   "lo": 25,
+   "hi": 40,
+   "holiday": false,
+   "srcDate": "2026-09-04",
+   "srcDow": 4,
+   "base": 27.3,
+   "uplift": 1.0
+  },
+  {
+   "rel": -20,
+   "date": "2027-01-18",
+   "dow": 0,
+   "pred": 106,
+   "lo": 82,
+   "hi": 129,
+   "holiday": false,
+   "srcDate": "2026-09-05",
+   "srcDow": 5,
+   "base": 76.0,
+   "uplift": 1.16
+  },
+  {
+   "rel": -19,
+   "date": "2027-01-19",
+   "dow": 1,
+   "pred": 114,
+   "lo": 89,
+   "hi": 138,
+   "holiday": false,
+   "srcDate": "2026-09-06",
+   "srcDow": 6,
+   "base": 65.2,
+   "uplift": 1.46
+  },
+  {
+   "rel": -18,
+   "date": "2027-01-20",
+   "dow": 2,
+   "pred": 161,
+   "lo": 125,
+   "hi": 196,
+   "holiday": false,
+   "srcDate": "2026-09-07",
+   "srcDow": 0,
+   "base": 63.3,
+   "uplift": 2.12
+  },
+  {
+   "rel": -17,
+   "date": "2027-01-21",
+   "dow": 3,
+   "pred": 184,
+   "lo": 143,
+   "hi": 224,
+   "holiday": false,
+   "srcDate": "2026-09-08",
+   "srcDow": 1,
+   "base": 57.6,
+   "uplift": 2.67
+  },
+  {
+   "rel": -16,
+   "date": "2027-01-22",
+   "dow": 4,
+   "pred": 229,
+   "lo": 178,
+   "hi": 279,
+   "holiday": false,
+   "srcDate": "2026-09-09",
+   "srcDow": 2,
+   "base": 61.2,
+   "uplift": 3.13
+  },
+  {
+   "rel": -15,
+   "date": "2027-01-23",
+   "dow": 5,
+   "pred": 122,
+   "lo": 95,
+   "hi": 149,
+   "holiday": false,
+   "srcDate": "2026-09-10",
+   "srcDow": 3,
+   "base": 35.2,
+   "uplift": 2.91
+  },
+  {
+   "rel": -14,
+   "date": "2027-01-24",
+   "dow": 6,
+   "pred": 71,
+   "lo": 55,
+   "hi": 86,
+   "holiday": false,
+   "srcDate": "2026-09-11",
+   "srcDow": 4,
+   "base": 27.4,
+   "uplift": 2.16
+  },
+  {
+   "rel": -13,
+   "date": "2027-01-25",
+   "dow": 0,
+   "pred": 146,
+   "lo": 114,
+   "hi": 179,
+   "holiday": false,
+   "srcDate": "2026-09-12",
+   "srcDow": 5,
+   "base": 76.2,
+   "uplift": 1.61
+  },
+  {
+   "rel": -12,
+   "date": "2027-01-26",
+   "dow": 1,
+   "pred": 90,
+   "lo": 70,
+   "hi": 109,
+   "holiday": false,
+   "srcDate": "2026-09-13",
+   "srcDow": 6,
+   "base": 65.4,
+   "uplift": 1.15
+  },
+  {
+   "rel": -11,
+   "date": "2027-01-27",
+   "dow": 2,
+   "pred": 81,
+   "lo": 63,
+   "hi": 99,
+   "holiday": false,
+   "srcDate": "2026-09-14",
+   "srcDow": 0,
+   "base": 63.4,
+   "uplift": 1.07
+  },
+  {
+   "rel": -10,
+   "date": "2027-01-28",
+   "dow": 3,
+   "pred": 63,
+   "lo": 49,
+   "hi": 77,
+   "holiday": false,
+   "srcDate": "2026-09-15",
+   "srcDow": 1,
+   "base": 57.7,
+   "uplift": 0.91
+  },
+  {
+   "rel": -9,
+   "date": "2027-01-29",
+   "dow": 4,
+   "pred": 63,
+   "lo": 49,
+   "hi": 77,
+   "holiday": false,
+   "srcDate": "2026-09-16",
+   "srcDow": 2,
+   "base": 61.3,
+   "uplift": 0.86
+  },
+  {
+   "rel": -8,
+   "date": "2027-01-30",
+   "dow": 5,
+   "pred": 38,
+   "lo": 30,
+   "hi": 47,
+   "holiday": false,
+   "srcDate": "2026-09-17",
+   "srcDow": 3,
+   "base": 35.3,
+   "uplift": 0.91
+  },
+  {
+   "rel": -7,
+   "date": "2027-01-31",
+   "dow": 6,
+   "pred": 34,
+   "lo": 27,
+   "hi": 42,
+   "holiday": false,
+   "srcDate": "2026-09-18",
+   "srcDow": 4,
+   "base": 27.5,
+   "uplift": 1.04
+  },
+  {
+   "rel": -6,
+   "date": "2027-02-01",
+   "dow": 0,
+   "pred": 114,
+   "lo": 89,
+   "hi": 139,
+   "holiday": false,
+   "srcDate": "2026-09-19",
+   "srcDow": 5,
+   "base": 76.3,
+   "uplift": 1.25
+  },
+  {
+   "rel": -5,
+   "date": "2027-02-02",
+   "dow": 1,
+   "pred": 131,
+   "lo": 102,
+   "hi": 160,
+   "holiday": false,
+   "srcDate": "2026-09-20",
+   "srcDow": 6,
+   "base": 65.5,
+   "uplift": 1.68
+  },
+  {
+   "rel": -4,
+   "date": "2027-02-03",
+   "dow": 2,
+   "pred": 159,
+   "lo": 124,
+   "hi": 195,
+   "holiday": false,
+   "srcDate": "2026-09-21",
+   "srcDow": 0,
+   "base": 63.6,
+   "uplift": 2.1
+  },
+  {
+   "rel": -3,
+   "date": "2027-02-04",
+   "dow": 3,
+   "pred": 203,
+   "lo": 159,
+   "hi": 248,
+   "holiday": false,
+   "srcDate": "2026-09-22",
+   "srcDow": 1,
+   "base": 57.9,
+   "uplift": 2.94
+  },
+  {
+   "rel": -2,
+   "date": "2027-02-05",
+   "dow": 4,
+   "pred": 289,
+   "lo": 226,
+   "hi": 353,
+   "holiday": false,
+   "srcDate": "2026-09-23",
+   "srcDow": 2,
+   "base": 61.5,
+   "uplift": 3.94
+  },
+  {
+   "rel": -1,
+   "date": "2027-02-06",
+   "dow": 5,
+   "pred": 351,
+   "lo": 273,
+   "hi": 428,
+   "holiday": true,
+   "srcDate": "2026-09-24",
+   "srcDow": 3,
+   "base": 55.6,
+   "uplift": 5.27
+  },
+  {
+   "rel": 0,
+   "date": "2027-02-07",
+   "dow": 6,
+   "pred": 376,
+   "lo": 293,
+   "hi": 458,
+   "holiday": true,
+   "srcDate": "2026-09-25",
+   "srcDow": 4,
+   "base": 55.7,
+   "uplift": 5.65
+  },
+  {
+   "rel": 1,
+   "date": "2027-02-08",
+   "dow": 0,
+   "pred": 291,
+   "lo": 227,
+   "hi": 354,
+   "holiday": true,
+   "srcDate": "2026-09-26",
+   "srcDow": 5,
+   "base": 55.7,
+   "uplift": 4.37
+  },
+  {
+   "rel": 2,
+   "date": "2027-02-09",
+   "dow": 1,
+   "pred": 234,
+   "lo": 183,
+   "hi": 286,
+   "holiday": true,
+   "srcDate": "2026-09-27",
+   "srcDow": 6,
+   "base": 55.7,
+   "uplift": 3.52
+  },
+  {
+   "rel": 3,
+   "date": "2027-02-10",
+   "dow": 2,
+   "pred": 213,
+   "lo": 166,
+   "hi": 259,
+   "holiday": false,
+   "srcDate": "2026-09-28",
+   "srcDow": 0,
+   "base": 63.7,
+   "uplift": 2.79
+  },
+  {
+   "rel": 4,
+   "date": "2027-02-11",
+   "dow": 3,
+   "pred": 166,
+   "lo": 129,
+   "hi": 202,
+   "holiday": false,
+   "srcDate": "2026-09-29",
+   "srcDow": 1,
+   "base": 58.0,
+   "uplift": 2.39
+  },
+  {
+   "rel": 5,
+   "date": "2027-02-12",
+   "dow": 4,
+   "pred": 185,
+   "lo": 144,
+   "hi": 226,
+   "holiday": false,
+   "srcDate": "2026-09-30",
+   "srcDow": 2,
+   "base": 61.6,
+   "uplift": 2.51
+  },
+  {
+   "rel": 6,
+   "date": "2027-02-13",
+   "dow": 5,
+   "pred": 92,
+   "lo": 71,
+   "hi": 112,
+   "holiday": false,
+   "srcDate": "2026-10-01",
+   "srcDow": 3,
+   "base": 35.4,
+   "uplift": 2.17
+  },
+  {
+   "rel": 7,
+   "date": "2027-02-14",
+   "dow": 6,
+   "pred": 61,
+   "lo": 47,
+   "hi": 74,
+   "holiday": false,
+   "srcDate": "2026-10-02",
+   "srcDow": 4,
+   "base": 27.6,
+   "uplift": 1.84
+  },
+  {
+   "rel": 8,
+   "date": "2027-02-15",
+   "dow": 0,
+   "pred": 138,
+   "lo": 108,
+   "hi": 169,
+   "holiday": false,
+   "srcDate": "2026-10-03",
+   "srcDow": 5,
+   "base": 76.7,
+   "uplift": 1.51
+  },
+  {
+   "rel": 9,
+   "date": "2027-02-16",
+   "dow": 1,
+   "pred": 104,
+   "lo": 82,
+   "hi": 127,
+   "holiday": false,
+   "srcDate": "2026-10-04",
+   "srcDow": 6,
+   "base": 65.8,
+   "uplift": 1.33
+  },
+  {
+   "rel": 10,
+   "date": "2027-02-17",
+   "dow": 2,
+   "pred": 83,
+   "lo": 65,
+   "hi": 102,
+   "holiday": false,
+   "srcDate": "2026-10-05",
+   "srcDow": 0,
+   "base": 63.9,
+   "uplift": 1.09
+  }
+ ],
+ "summary": {
+  "totalChuseok": 3874,
+  "totalPred": 4725,
+  "deltaPct": 22.0,
+  "peakDate": "2027-02-07",
+  "peakPred": 376,
+  "peakLo": 293,
+  "peakHi": 458,
+  "peakMultiple": 6.8,
+  "staffNeeded": 21,
+  "handlePerPersonDay": 18
+ },
+ "chuseokOps": {
+  "overdueRate": 53.0,
+  "openRate": 18.7,
+  "normalOverdueRate": 17.8,
+  "normalOpenRate": 13.2
+ },
+ "types": [
+  {
+   "type": "귀성표예매",
+   "chuseok": 507,
+   "share": 13.1,
+   "normalShare": 0.3,
+   "pred": 618,
+   "ratio": 37.4
+  },
+  {
+   "type": "명절수하물",
+   "chuseok": 351,
+   "share": 9.1,
+   "normalShare": 0.0,
+   "pred": 428,
+   "ratio": null
+  },
+  {
+   "type": "반환위약금",
+   "chuseok": 333,
+   "share": 8.6,
+   "normalShare": 0.0,
+   "pred": 406,
+   "ratio": null
+  },
+  {
+   "type": "귀성지연",
+   "chuseok": 329,
+   "share": 8.5,
+   "normalShare": 0.0,
+   "pred": 401,
+   "ratio": null
+  },
+  {
+   "type": "임시열차",
+   "chuseok": 322,
+   "share": 8.3,
+   "normalShare": 0.1,
+   "pred": 393,
+   "ratio": 71.3
+  },
+  {
+   "type": "할인적용",
+   "chuseok": 192,
+   "share": 5.0,
+   "normalShare": 11.7,
+   "pred": 234,
+   "ratio": 0.4
+  },
+  {
+   "type": "예약발권",
+   "chuseok": 185,
+   "share": 4.8,
+   "normalShare": 11.8,
+   "pred": 226,
+   "ratio": 0.4
+  },
+  {
+   "type": "입석혼잡",
+   "chuseok": 182,
+   "share": 4.7,
+   "normalShare": 0.0,
+   "pred": 222,
+   "ratio": null
+  },
+  {
+   "type": "앱오류",
+   "chuseok": 179,
+   "share": 4.6,
+   "normalShare": 12.5,
+   "pred": 218,
+   "ratio": 0.4
+  },
+  {
+   "type": "시설",
+   "chuseok": 170,
+   "share": 4.4,
+   "normalShare": 12.1,
+   "pred": 207,
+   "ratio": 0.4
+  },
+  {
+   "type": "경로우대",
+   "chuseok": 156,
+   "share": 4.0,
+   "normalShare": 0.2,
+   "pred": 190,
+   "ratio": 20.7
+  },
+  {
+   "type": "단체귀성",
+   "chuseok": 147,
+   "share": 3.8,
+   "normalShare": 0.1,
+   "pred": 179,
+   "ratio": 39.1
+  }
+ ],
+ "depts": [
+  {
+   "dept": "여객사업본부",
+   "pred": 1771,
+   "share": 37.5
+  },
+  {
+   "dept": "역무팀",
+   "pred": 1160,
+   "share": 24.5
+  },
+  {
+   "dept": "단체운송팀",
+   "pred": 724,
+   "share": 15.3
+  },
+  {
+   "dept": "고객만족팀",
+   "pred": 363,
+   "share": 7.7
+  },
+  {
+   "dept": "법인영업팀",
+   "pred": 357,
+   "share": 7.6
+  },
+  {
+   "dept": "시설관리팀",
+   "pred": 349,
+   "share": 7.4
+  }
+ ],
+ "caveats": [
+  "명절 관측이 추석 1회뿐이라 계절 평균이 아니라 단일 표본이다. 설 실적이 쌓이면 프로파일을 평균으로 바꿔야 한다.",
+  "±구간은 잔차에서 계산한 값이 아니라 단일 표본 투영에 두는 바닥값이다. 프로파일을 추석 데이터 자체에서 뽑았으므로 잔차 기반 구간은 실제보다 좁게 나온다.",
+  "추석 당일은 금요일, 설 당일은 일요일이라 상대일의 요일이 2일 어긋난다. 연휴 바깥 구간만 요일 계수로 보정했다.",
+  "설 시점 평시 기준선은 데이터 범위 밖이라 추세 외삽값이다.",
+  "운행중지·폭설·운임 개정 같은 외생 변수는 반영하지 않는다.",
+  "예매 오픈일이 바뀌면 D-30 부근 봉우리 위치가 통째로 이동한다. 실제 예매일 확정 후 재계산이 필요하다."
+ ]
+}
