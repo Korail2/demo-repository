@@ -118,6 +118,33 @@
 const DL_SYNC_LIMIT = 3000;
 let DATA = [], view = [], page = 1, sortKey = "등록일", sortDir = -1;
 
+/* ---------- 데이터 출처 ----------
+   정적 모드  CSV 를 통째로 받아 브라우저가 거른다 (GitHub Pages 데모)
+   서버 모드  /api 로 질의한다. 한 페이지씩만 내려오고 집계도 서버가 한다.
+   부트에서 /api/health 응답 여부로 가른다. 화면 코드는 둘을 구분하지 않는다. */
+let SERVER = false, TOTAL = 0, SUM = null, DATA_RANGE = null;
+
+function qs(c, extra){
+  const p = new URLSearchParams();
+  if (c.d1) p.set('from', c.d1);
+  if (c.d2) p.set('to', c.d2);
+  if (c.type) p.set('type', c.type);
+  if (c.ch) p.set('ch', c.ch);
+  if (c.dept) p.set('dept', c.dept);
+  if (c.stat) p.set('stat', c.stat);
+  if (c.kw) p.set('q', c.kw);
+  for (const k in (extra || {})) p.set(k, extra[k]);
+  return p.toString();
+}
+async function fetchPage(){
+  const c = conds(), size = +$('pgsize').value;
+  const [a, b] = await Promise.all([
+    fetch('/api/complaints?' + qs(c, { page, size, sort: sortKey, dir: sortDir < 0 ? 'desc' : 'asc' })).then(r => r.json()),
+    fetch('/api/summary?' + qs(c)).then(r => r.json())
+  ]);
+  view = a.rows || []; TOTAL = a.total || 0; SUM = b;
+}
+
 /* ---------- 필터 ---------- */
 function conds(){
   return { d1:$('d1').value, d2:$('d2').value, type:$('f-type').value, ch:$('f-ch').value,
@@ -136,7 +163,14 @@ function applyFilter(){
     if (kw && !(r['제목'] + r['질문'] + r['답변']).toLowerCase().includes(kw)) return false;
     return true;
   });
-  sortView(); page = 1;
+  sortView(); page = 1; TOTAL = view.length; SUM = null;
+}
+
+/* 조회 → 렌더를 한 묶음으로. 서버 모드에서만 비동기다. */
+async function refresh(resetPage){
+  if (resetPage !== false) page = 1;
+  if (SERVER) await fetchPage(); else applyFilter();
+  render();
 }
 function sortView(){
   view.sort((a, b) => { const x = a[sortKey] || '', y = b[sortKey] || '';
@@ -154,17 +188,18 @@ function condText(){
 
 /* ---------- 렌더 ---------- */
 function render(){
-  $('total').textContent = nf(view.length);
+  $('total').textContent = nf(TOTAL);
   renderFigs(); renderRows(); renderPager(); syncArrows();
-  $('btn-dl').textContent = view.length ? `${nf(view.length)}건 CSV 생성` : 'CSV 생성';
-  $('btn-dl').disabled = !view.length;
+  $('btn-dl').textContent = TOTAL ? `${nf(TOTAL)}건 CSV 생성` : 'CSV 생성';
+  $('btn-dl').disabled = !TOTAL;
 }
 function renderFigs(){
-  const n = view.length;
-  const done = view.filter(r => status(r)[1] === 'done').length;
-  const over = view.filter(r => status(r)[1] === 'over').length;
-  const open = view.filter(r => status(r)[1] === 'open').length;
-  const days = new Set(view.map(r => day(r['등록일']))).size;
+  // 서버 모드에서는 한 페이지만 들고 있으므로 집계를 직접 셀 수 없다. 서버 값을 쓴다.
+  const n = SUM ? SUM.total : view.length;
+  const done = SUM ? SUM.done : view.filter(r => status(r)[1] === 'done').length;
+  const over = SUM ? SUM.over : view.filter(r => status(r)[1] === 'over').length;
+  const open = SUM ? SUM.open : view.filter(r => status(r)[1] === 'open').length;
+  const days = SUM ? SUM.days : new Set(view.map(r => day(r['등록일']))).size;
   $('figs').innerHTML = [
     ['조회 건수', nf(n), days ? `${nf(days)}일간` : '—', ''],
     ['완료', nf(done), n ? (done / n * 100).toFixed(1) + '%' : '—', ''],
@@ -174,8 +209,9 @@ function renderFigs(){
   ].map(([k, v, s, cls]) =>
     `<div class="fig"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`).join('');
 
-  const H = new Array(24).fill(0);
-  view.forEach(r => { const h = parseInt((r['등록일'] || '').slice(11, 13), 10); if (h >= 0 && h < 24) H[h]++; });
+  let H = new Array(24).fill(0);
+  if (SUM) H = SUM.hours.slice();
+  else view.forEach(r => { const h = parseInt((r['등록일'] || '').slice(11, 13), 10); if (h >= 0 && h < 24) H[h]++; });
   // 우측 요약 컬럼(약 300px)에 들어가므로 viewBox 를 실제 렌더 폭에 가깝게 잡는다.
   // 680 짜리를 300px 로 줄여 그리면 글자가 절반 크기로 뭉개진다.
   const mx = Math.max(1, ...H), W = 340, Hh = 152, PL = 34, PR = 6, PT = 18, PB = 20;
@@ -198,8 +234,13 @@ function renderFigs(){
     + ` font-size="9.5" font-weight="700" font-family="var(--mono)" fill="var(--brand)">${nf(mx)}</text>`;
   $('ch-hour').innerHTML = s + '</svg>';
 
-  const cnt = {}; view.forEach(r => cnt[r['민원유형']] = (cnt[r['민원유형']] || 0) + 1);
-  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 8), tm = top.length ? top[0][1] : 1;
+  let top;
+  if (SUM) top = SUM.topTypes.map(t => [t.k, t.n]);
+  else {
+    const cnt = {}; view.forEach(r => cnt[r['민원유형']] = (cnt[r['민원유형']] || 0) + 1);
+    top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }
+  const tm = top.length ? top[0][1] : 1;
   $('ch-type').innerHTML = top.length ? top.map(([k, v]) =>
     `<div class="rk"><span class="nm" title="${esc(k)}">${esc(k)}</span>`
     + `<span class="tr"><i style="width:${(v / tm * 100).toFixed(1)}%"></i></span>`
@@ -207,7 +248,10 @@ function renderFigs(){
     : '<p style="color:var(--text-3);font-size:12px;margin:0">표시할 데이터가 없습니다.</p>';
 }
 function renderRows(){
-  const size = +$('pgsize').value, start = (page - 1) * size, slice = view.slice(start, start + size);
+  // 서버 모드의 view 는 이미 현재 페이지다. start 를 0 으로 둬 data-i 가 양쪽에서 view 의 인덱스가 된다.
+  const size = +$('pgsize').value;
+  const start = SERVER ? 0 : (page - 1) * size;
+  const slice = SERVER ? view : view.slice(start, start + size);
   if (!slice.length){
     $('rows').innerHTML = `<tr><td colspan="8"><div class="none"><b>조회 결과가 없습니다</b>조회 조건을 넓혀 다시 시도해 주세요.</div></td></tr>`;
     return;
@@ -224,7 +268,7 @@ function renderRows(){
   }).join('');
 }
 function renderPager(){
-  const size = +$('pgsize').value, last = Math.max(1, Math.ceil(view.length / size));
+  const size = +$('pgsize').value, last = Math.max(1, Math.ceil(TOTAL / size));
   if (page > last) page = last;
   const nums = [1];
   for (let p = page - 2; p <= page + 2; p++) if (p > 1 && p < last) nums.push(p);
@@ -292,7 +336,46 @@ function dlPanel(csv, name, n, how){
   };
   logHist(n, how);
 }
+/* 서버 모드 — 반출은 서버가 만든다. 브라우저는 조건만 보낸다.
+   한도 이하면 그 자리에서 CSV 가 오고, 넘으면 202 + job 이 온다. */
+async function doDownloadServer(){
+  const n = TOTAL; if (!n) return;
+  const c = conds();
+  const body = JSON.stringify({ from:c.d1, to:c.d2, type:c.type, dept:c.dept, q:c.kw });
+  const res = await fetch('/api/exports', {
+    method:'POST', headers:{ 'Content-Type':'application/json' }, body });
+
+  if (res.status === 200){
+    dlPanel(await res.text(), fileName(n), n, '서버 즉시 생성');
+    return;
+  }
+  if (res.status !== 202){ alert('반출 요청이 거부되었습니다.'); return; }
+
+  const job = await res.json();
+  $('dl-zone').innerHTML = `<div class="dlbox">
+    <div class="h"><span class="fn">반출 작업 생성됨</span>
+      <span class="mt">${nf(job.rowCount)}건 · 즉시 생성 상한 초과</span></div>
+    <div class="bar-prog"><i id="pg" style="width:12%"></i></div>
+    <pre id="pg-msg">서버에서 파일을 만들고 있습니다. 완료되면 만료 시간이 있는 링크가 발급됩니다.</pre></div>`;
+
+  for (let i = 0; i < 60; i++){
+    await new Promise(r => setTimeout(r, 700));
+    const s = await fetch('/api/exports/' + job.jobId).then(r => r.json());
+    const bar = $('pg'); if (bar) bar.style.width = Math.min(90, 12 + i * 14) + '%';
+    if (s.status === 'failed'){ $('pg-msg').textContent = '생성 실패: ' + (s.error || ''); return; }
+    if (s.status === 'done'){
+      if (bar) bar.style.width = '100%';
+      const csv = await fetch(s.url).then(r => r.text());
+      dlPanel(csv, fileName(s.rowCount), s.rowCount,
+              '서버 비동기 생성 · 링크 만료 ' + (s.expiresAt || '').slice(11, 16));
+      return;
+    }
+  }
+  $('pg-msg').textContent = '시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.';
+}
+
 function doDownload(){
+  if (SERVER) return doDownloadServer();
   const n = view.length; if (!n) return;
   const name = fileName(n), rows = view.slice();
   if (n > DL_SYNC_LIMIT){
@@ -320,14 +403,22 @@ function renderHist(){
 }
 
 /* ---------- 조건 UI ---------- */
-function fillSelects(){
-  const put = (id, key) => {
-    const vals = [...new Set(DATA.map(r => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+function fillSelects(facets){
+  const opts = (id, vals) =>
     $(id).insertAdjacentHTML('beforeend', vals.map(v => `<option>${esc(v)}</option>`).join(''));
-  };
+  if (facets){
+    // 서버 모드 — 선택지를 DB 에서 받는다. 화면이 값 목록을 하드코딩하지 않는다.
+    opts('f-type', facets.types.map(t => t.k));
+    opts('f-dept', facets.depts.map(t => t.k));
+    opts('f-ch', (facets.channels || []).map(t => t.k));
+    return;
+  }
+  const put = (id, key) =>
+    opts(id, [...new Set(DATA.map(r => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko')));
   put('f-type', '민원유형'); put('f-ch', '유입경로'); put('f-dept', '처리부서');
 }
 function bounds(){
+  if (DATA_RANGE) return [DATA_RANGE.from, DATA_RANGE.to];
   const ds = DATA.map(r => day(r['등록일'])).filter(Boolean).sort();
   return [ds[0], ds[ds.length - 1]];
 }
@@ -345,27 +436,30 @@ function setPreset(days){
 }
 
 /* ---------- 이벤트 ---------- */
-$('btn-search').onclick = () => { applyFilter(); render(); $('dl-zone').innerHTML = ''; };
+$('btn-search').onclick = () => { refresh(); $('dl-zone').innerHTML = ''; };
 $('btn-reset').onclick = () => {
   ['f-type','f-ch','f-dept','f-stat'].forEach(i => $(i).value = '');
-  $('f-kw').value = ''; setPreset(0); applyFilter(); render(); $('dl-zone').innerHTML = '';
+  $('f-kw').value = ''; setPreset(0); refresh(); $('dl-zone').innerHTML = '';
 };
 $('btn-dl').onclick = doDownload;
-$('pgsize').onchange = () => { page = 1; renderRows(); renderPager(); };
+$('pgsize').onchange = () => { refresh(); };
 $('btn-clearhist').onclick = () => { try { localStorage.removeItem(HK); } catch (e) {} renderHist(); };
 $('d1').onchange = $('d2').onchange = () => {
   document.querySelectorAll('.quick button').forEach(c => c.setAttribute('aria-pressed', 'false'));
 };
 document.querySelectorAll('.quick button').forEach(c =>
-  c.onclick = () => { setPreset(+c.dataset.days); applyFilter(); render(); });
+  c.onclick = () => { setPreset(+c.dataset.days); refresh(); });
 document.querySelectorAll('th.so').forEach(th => th.onclick = () => {
   const k = th.dataset.sort;
   if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = -1; }
-  sortView(); page = 1; render();
+  if (SERVER) { refresh(); } else { sortView(); page = 1; render(); }
 });
 $('pager').addEventListener('click', e => {
   const b = e.target.closest('button[data-p]');
-  if (b && !b.disabled){ page = +b.dataset.p; renderRows(); renderPager(); }
+  if (b && !b.disabled){
+    page = +b.dataset.p;
+    if (SERVER) refresh(false); else { renderRows(); renderPager(); }
+  }
 });
 $('rows').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-i]'); if (tr) openDrawer(+tr.dataset.i);
@@ -379,13 +473,30 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
 
 /* ---------- 부트 ---------- */
 (async function boot(){
-  DATA = await loadCSV('data/masked_seasonal.csv') || [];
-  if (DATA.length){
-    const r = `${day(DATA[0]['등록일'])} — ${day(DATA[DATA.length - 1]['등록일'])}`;
-    $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
+  // 서버가 붙어 있으면 서버 모드. 없으면 CSV 를 받아 브라우저가 거르는 정적 모드.
+  let health = null;
+  try {
+    const r = await fetch('/api/health', { cache:'no-store' });
+    if (r.ok) health = await r.json();
+  } catch (e) {}
+
+  if (health){
+    SERVER = true;
+    const fc = await fetch('/api/facets').then(r => r.json());
+    fillSelects(fc);
+    $('src').innerHTML = `<span class="lbl">서버 · ${esc(health.dbUser)}</span>`
+      + `<b>${nf(health.rows)}</b>행<br>${esc(fc.range.from)}<br>~ ${esc(fc.range.to)}`
+      + `<br><span class="lbl" style="margin-top:4px">규칙 ${esc(health.maskVersion)}</span>`;
+    DATA_RANGE = fc.range;
   } else {
-    $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
+    DATA = await loadCSV('data/masked_seasonal.csv') || [];
+    if (DATA.length){
+      $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
+    } else {
+      $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
+    }
+    fillSelects();
   }
-  fillSelects(); setPreset(0); renderHist(); applyFilter(); render();
+  setPreset(0); renderHist(); await refresh();
 })();
 </script>
