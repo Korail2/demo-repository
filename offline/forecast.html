@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="열차 민원 마스킹 데이터 조회·다운로드 및 추석 기반 설 연휴 민원 예측 콘솔">
+<meta name="robots" content="noindex">
+<style>
+/* 정적 호스팅용 기본 리셋 — 아티팩트 환경에서는 플랫폼이 넣어주는 부분 */
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+/* el.hidden 으로 토글하는 요소가 display:flex/grid 규칙에 덮이지 않게 한다 */
+[hidden]{display:none!important}
+</style>
+<title>민원 예측</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* ─────────────────────────────────────────────────────────────────────
+   민원 조회 콘솔 — 사내 업무 시스템 테마
+
+   레이아웃  좌측 고정 내비게이션(짙은 남색, 테마 무관) + 우측 콘텐츠.
+             콘텐츠는 '페이지 헤더 → 카드' 구조. 카드는 묶어야 할 때만 쓴다.
+   색        레일 블루 하나를 조작 요소와 데이터에만 쓰고,
+             상태색(정상·주의·경고)은 따로 둔다. 그 외는 전부 중성색.
+   타이포     Gothic A1(UI) + IBM Plex Mono(모든 숫자·식별자).
+             숫자는 tabular-nums 로 자릿수를 맞춘다.
+   ───────────────────────────────────────────────────────────────────── */
+
+:root{
+  /* 캔버스·표면 */
+  --canvas:#eef2f7; --surface:#fff; --surface-2:#f6f9fc; --surface-3:#eaf0f7;
+  --border:#dbe3ed; --border-2:#c2cedd;
+  --shadow:0 1px 2px rgba(18,32,51,.05), 0 1px 1px rgba(18,32,51,.03);
+  --shadow-lg:0 12px 32px rgba(18,32,51,.14);
+  /* 글자 */
+  --text:#15202e; --text-2:#54657a; --text-3:#8496aa;
+  /* 브랜드 — 레일 블루 */
+  --brand:#0f4c9c; --brand-ink:#fff; --brand-50:#e8f0fb; --brand-line:#b4cdeb;
+  /* 상태 */
+  --ok:#17663c; --ok-bg:#e7f3ec; --ok-line:#b9ddc8;
+  --warn:#9a5810; --warn-bg:#fcf2e3; --warn-line:#ecd3ab;
+  --crit:#a92525; --crit-bg:#fbebeb; --crit-line:#eec4c4;
+  /* 좌측 내비 — 테마와 무관하게 짙은 남색을 유지한다 */
+  --nav-bg:#122133; --nav-bg-2:#0d1a28; --nav-fg:#cbd8e8; --nav-fg-2:#7d90a8;
+  --nav-active:rgba(255,255,255,.09); --nav-line:rgba(255,255,255,.08);
+  /* 글꼴 */
+  --ui:"Gothic A1","Malgun Gothic",-apple-system,system-ui,sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+  --r:6px; --r-sm:4px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --canvas:#0b1017; --surface:#141b24; --surface-2:#19212c; --surface-3:#1f2935;
+  --border:#263140; --border-2:#374659;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  --text:#e7eef6; --text-2:#9db0c6; --text-3:#6c7f95;
+  --brand:#5b9ce8; --brand-ink:#08182c; --brand-50:#13273d; --brand-line:#2c4a6e;
+  --ok:#54bd87; --ok-bg:#122a1e; --ok-line:#1f4a33;
+  --warn:#d8a054; --warn-bg:#2a2114; --warn-line:#4a3a1e;
+  --crit:#e08484; --crit-bg:#2b1818; --crit-line:#4d2a2a;
+  --nav-bg:#0d1620; --nav-bg-2:#09111a; --nav-fg:#c3d2e4; --nav-fg-2:#74879e;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --canvas:#0b1017; --surface:#141b24; --surface-2:#19212c; --surface-3:#1f2935;
+  --border:#263140; --border-2:#374659;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 12px 32px rgba(0,0,0,.5);
+  --text:#e7eef6; --text-2:#9db0c6; --text-3:#6c7f95;
+  --brand:#5b9ce8; --brand-ink:#08182c; --brand-50:#13273d; --brand-line:#2c4a6e;
+  --ok:#54bd87; --ok-bg:#122a1e; --ok-line:#1f4a33;
+  --warn:#d8a054; --warn-bg:#2a2114; --warn-line:#4a3a1e;
+  --crit:#e08484; --crit-bg:#2b1818; --crit-line:#4d2a2a;
+  --nav-bg:#0d1620; --nav-bg-2:#09111a; --nav-fg:#c3d2e4; --nav-fg-2:#74879e;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--canvas);color:var(--text);margin:0;font-family:var(--ui);
+  font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;font-weight:600;text-wrap:balance}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--brand)}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:var(--r-sm)}
+.sp{flex:1;min-width:0}
+.num,.m{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ── 앱 셸 ─────────────────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:218px minmax(0,1fr);min-height:100%}
+.side{background:var(--nav-bg);z-index:20;padding-left:env(safe-area-inset-left,0px)}
+.side-in{display:flex;flex-direction:column;position:sticky;top:env(safe-area-inset-top,0px);
+  max-height:calc(100vh - env(safe-area-inset-top,0px));overflow-y:auto}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);
+  z-index:30;background:var(--nav-bg)}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 15px;border-bottom:1px solid var(--nav-line)}
+.brand .logo{flex:0 0 30px;height:30px;border-radius:var(--r-sm);background:var(--brand);color:#fff;
+  display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.03em}
+.brand .bn{min-width:0;display:grid;line-height:1.35}
+.brand .bn b{color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap}
+.brand .bn em{color:var(--nav-fg-2);font-size:10px;font-style:normal;font-family:var(--mono);letter-spacing:.06em}
+.snav{padding:10px 8px;display:grid;gap:1px}
+.snav a{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--nav-fg);text-decoration:none;font-size:12.5px;transition:background .12s,color .12s}
+.snav a svg{flex:0 0 15px;opacity:.72}
+.snav a:hover{background:var(--nav-active);color:#fff}
+.snav a[aria-current=page]{background:var(--nav-active);color:#fff;font-weight:600;
+  box-shadow:inset 2px 0 0 var(--brand)}
+.snav a[aria-current=page] svg{opacity:1}
+.snav .grp{padding:14px 10px 5px;color:var(--nav-fg-2);font-size:10px;letter-spacing:.09em;text-transform:uppercase}
+.side-foot{margin-top:auto;padding:13px 16px;border-top:1px solid var(--nav-line);background:var(--nav-bg-2);
+  font-family:var(--mono);font-size:10.5px;line-height:1.75;color:var(--nav-fg-2);word-break:break-all}
+.side-foot b{color:var(--nav-fg);font-weight:500}
+.side-foot .lbl{display:block;letter-spacing:.07em;text-transform:uppercase;font-size:9.5px;
+  color:var(--nav-fg-2);opacity:.75;margin-bottom:2px}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.phead{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:18px max(22px,env(safe-area-inset-right,0px)) 17px 22px;
+  display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.phead h2{font-size:17px;letter-spacing:-.015em}
+.phead p{margin:3px 0 0;color:var(--text-2);font-size:12.5px;max-width:78ch}
+.phead-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.content{padding:20px max(22px,env(safe-area-inset-right,0px)) 44px 22px;display:grid;gap:18px;align-content:start}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{padding:0 max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+  .side-in{position:static;max-height:none;flex-direction:row;align-items:center;gap:6px;flex-wrap:wrap;overflow:visible}
+  .brand{border-bottom:0;padding:12px 0}
+  .snav{display:flex;padding:0;gap:3px;margin-left:auto}
+  .snav .grp{display:none}
+  .side-foot{display:none}
+  .phead{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .content{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+
+/* ── 카드 ──────────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:var(--shadow);min-width:0}
+.card-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 16px;
+  border-bottom:1px solid var(--border);background:var(--surface-2);
+  border-radius:var(--r) var(--r) 0 0}
+.card-hd h3{font-size:12.5px;font-weight:600}
+.card-hd .sub{font-size:11px;color:var(--text-3);font-family:var(--mono)}
+.card-bd{padding:16px}
+.card-bd.flush{padding:0}
+.card-split{display:grid;grid-template-columns:1.55fr minmax(0,1fr);gap:0}
+.card-split>*{min-width:0;padding:16px}
+.card-split>*+*{border-left:1px solid var(--border)}
+@media (max-width:1040px){.card-split{grid-template-columns:1fr}
+  .card-split>*+*{border-left:0;border-top:1px solid var(--border)}}
+
+/* ── 버튼·입력 ─────────────────────────────────────────────────── */
+.btn{background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-sm);
+  padding:7px 14px;cursor:pointer;font-size:12.5px;white-space:nowrap;
+  transition:border-color .12s,background .12s,color .12s}
+.btn:hover{border-color:var(--brand);color:var(--brand)}
+.btn-go{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
+.btn-go:hover{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);filter:brightness(1.12)}
+.btn-sm{padding:4px 11px;font-size:11.5px}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn:disabled:hover{border-color:var(--border-2);color:inherit}
+input[type=date],input[type=text],select{width:100%;min-width:0;background:var(--surface);color:var(--text);
+  border:1px solid var(--border-2);border-radius:var(--r-sm);padding:7px 9px;transition:border-color .12s,box-shadow .12s}
+input:hover,select:hover{border-color:var(--text-3)}
+input:focus,select:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-50);outline:none}
+input[type=date]{font-family:var(--mono);font-size:12px;min-width:118px}
+
+/* ── 조회 조건 ─────────────────────────────────────────────────── */
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:13px 18px;align-items:end}
+.f{display:grid;gap:5px;min-width:0}
+.f.wide{grid-column:span 2}
+@media (max-width:620px){.f.wide{grid-column:span 1}}
+.f>label{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+.f .in{display:flex;gap:5px;align-items:center;min-width:0}
+.tilde{color:var(--text-3);flex:0 0 auto;font-size:11px}
+.row2{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:15px;padding-top:14px;
+  border-top:1px solid var(--border)}
+.quick{display:flex;gap:2px;flex-wrap:wrap}
+.quick button{background:none;border:1px solid transparent;padding:4px 11px;border-radius:999px;cursor:pointer;
+  font-size:12px;color:var(--text-2)}
+.quick button:hover{background:var(--surface-3);color:var(--text)}
+.quick button[aria-pressed=true]{background:var(--brand-50);border-color:var(--brand-line);
+  color:var(--brand);font-weight:600}
+
+/* ── 지표 타일 ─────────────────────────────────────────────────── */
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.fig{background:var(--surface);padding:11px 14px;min-width:0}
+.fig .k{font-size:10.5px;color:var(--text-3);letter-spacing:.04em;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.fig .v{font-family:var(--mono);font-size:25px;font-weight:600;letter-spacing:-.025em;
+  font-variant-numeric:tabular-nums;line-height:1.28}
+.fig .s{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.fig .v.attn{color:var(--crit)}
+.fig .v.acc{color:var(--brand)}
+
+/* ── 차트 ──────────────────────────────────────────────────────── */
+.plot{min-width:0}
+.plot h3{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;
+  font-weight:600;margin-bottom:11px}
+.plot svg,.mini svg{display:block;width:100%;height:auto;max-width:100%;overflow:visible}
+.plots{display:grid;grid-template-columns:1.5fr minmax(0,1fr);gap:0}
+.plots>*{min-width:0;padding:16px}
+.plots>*+*{border-left:1px solid var(--border)}
+@media (max-width:900px){.plots{grid-template-columns:1fr}
+  .plots>*+*{border-left:0;border-top:1px solid var(--border)}}
+.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--text-2);margin-bottom:10px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:18px;flex:0 0 18px;height:0;border-top-width:2px;display:inline-block}
+.legend i.a{border-top-style:dashed;border-top-color:var(--text-3)}
+.legend i.b{border-top-style:solid;border-top-color:var(--brand)}
+.legend i.c{height:8px;border:1px solid var(--brand-line);background:var(--brand-50);border-radius:2px}
+.rank{display:grid;gap:7px}
+.rk{display:grid;grid-template-columns:84px minmax(0,1fr) 48px;gap:10px;align-items:center;font-size:12px}
+.rk .nm{color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rk .tr{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.rk .tr i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.rk .ct{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;color:var(--text-2);font-size:11.5px}
+
+/* ── 표 ────────────────────────────────────────────────────────── */
+.tscroll{overflow-x:auto}
+table.grid,table.hist,table.daily{border-collapse:collapse;width:100%}
+table.grid{min-width:720px}
+table.hist{min-width:600px}
+table.daily{min-width:600px}
+.grid thead th,.hist th,.daily th{position:sticky;top:0;z-index:5;background:var(--surface-3);
+  padding:8px 9px;text-align:left;font-size:10.5px;font-weight:600;color:var(--text-2);
+  letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
+  box-shadow:inset 0 -1px 0 var(--border-2)}
+.hist th,.daily th{position:static}
+.grid thead th.so{cursor:pointer;user-select:none}
+.grid thead th.so:hover{color:var(--brand)}
+.grid thead th .ar{color:var(--brand);font-size:9px;margin-left:3px}
+.grid tbody td,.hist td,.daily td{padding:9px 9px;border-bottom:1px solid var(--border);
+  vertical-align:baseline;font-size:12.5px}
+.hist td,.daily td{font-size:12px}
+.grid tbody tr{cursor:pointer}
+.grid tbody tr:hover td{background:var(--brand-50)}
+td.m{font-family:var(--mono);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text-2)}
+td.ti{max-width:230px;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.nw{white-space:nowrap}
+.daily .n,.hist .n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.daily .wk{color:var(--text-3)}
+.daily tr.hol td{background:var(--brand-50)}
+.daily tr.peak td{font-weight:700}
+.daily tr.peak td:first-child::after{content:"피크";margin-left:7px;padding:1px 6px;border-radius:999px;
+  font-size:9.5px;font-weight:600;background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit-line)}
+.spark{display:inline-block;width:58px;height:7px;background:var(--surface-3);border-radius:2px;
+  overflow:hidden;vertical-align:middle}
+.spark i{display:block;height:100%;background:var(--brand);border-radius:2px}
+.none{padding:56px 16px;text-align:center;color:var(--text-3)}
+.none b{display:block;color:var(--text-2);font-size:14px;font-weight:600;margin-bottom:5px}
+
+/* 상태 — 색은 주의가 필요한 것에만 */
+.st{font-size:11.5px;white-space:nowrap}
+.st-done{color:var(--text-3)}
+.st-over{color:var(--crit);font-weight:600}
+.st-open{color:var(--text-2)}
+.st-open::before,.st-over::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+  margin-right:6px;vertical-align:middle;background:currentColor}
+.st-open::before{background:none;border:1.5px solid var(--text-3)}
+
+/* ── 결과 바 / 페이저 ──────────────────────────────────────────── */
+.resline{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 16px;
+  border-bottom:1px solid var(--border);background:var(--surface-2)}
+.resline .c{font-size:12.5px;color:var(--text-2)}
+.resline .c b{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.resline .pg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3)}
+.resline .pg select{width:auto;padding:4px 7px;font-size:11.5px}
+.pager{display:flex;justify-content:center;align-items:center;gap:2px;padding:14px 8px;flex-wrap:wrap;
+  border-top:1px solid var(--border)}
+.pager button{background:none;border:1px solid transparent;border-radius:var(--r-sm);min-width:30px;
+  padding:5px 8px;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--text-2)}
+.pager button:hover:not(:disabled){background:var(--surface-3);color:var(--text)}
+.pager button[aria-current=page]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:700}
+.pager button:disabled{opacity:.3;cursor:not-allowed}
+.pager .pi{margin-left:10px;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+
+/* ── 다운로드 출력 ─────────────────────────────────────────────── */
+.dlbox{margin:0;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.dlbox .h{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:11px 16px}
+.dlbox .fn{font-family:var(--mono);font-size:12px;font-weight:600;word-break:break-all}
+.dlbox .mt{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+.dlbox pre{margin:0;padding:12px 16px;overflow-x:auto;font-family:var(--mono);font-size:10.5px;
+  line-height:1.8;color:var(--text-3);max-height:170px;background:var(--surface-3);
+  border-top:1px solid var(--border)}
+.bar-prog{height:3px;background:var(--surface-3)}
+.bar-prog i{display:block;height:100%;width:0;background:var(--brand);transition:width .16s linear}
+.x{background:none;border:0;border-radius:var(--r-sm);width:24px;height:24px;cursor:pointer;
+  color:var(--text-3);line-height:1}
+.x:hover{background:var(--surface-3);color:var(--text)}
+.hint{font-size:11.5px;color:var(--text-3);margin:13px 0 0;max-width:92ch;line-height:1.8}
+.hint b{color:var(--text-2);font-weight:600}
+
+/* ── 상세 드로어 ───────────────────────────────────────────────── */
+.dw{position:fixed;top:0;right:0;bottom:0;width:min(580px,100%);background:var(--surface);z-index:40;
+  display:flex;flex-direction:column;box-shadow:var(--shadow-lg);border-left:1px solid var(--border-2);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-right:env(safe-area-inset-right,0px)}
+.dw-h{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface-2)}
+.dw-h .id{font-family:var(--mono);font-size:12.5px;font-weight:600;flex:1;min-width:0}
+.dw-b{overflow-y:auto;padding:20px;display:grid;gap:20px}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(152px,1fr));gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.kv>div{background:var(--surface);padding:8px 11px}
+.kv .k{font-size:10.5px;color:var(--text-3);letter-spacing:.04em}
+.kv .v{font-size:12.5px;word-break:break-word}
+.kv .v.m{font-family:var(--mono);font-size:11.5px}
+.blk h4{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);
+  font-weight:600;margin-bottom:8px}
+.blk p{margin:0;padding:11px 13px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-sm);white-space:pre-wrap;word-break:break-word;line-height:1.85;
+  max-width:62ch;font-size:12.5px}
+.tok{font-family:var(--mono);font-size:.9em;color:var(--brand);background:var(--brand-50);
+  padding:0 4px;border-radius:3px;border:1px solid var(--brand-line)}
+.scrim{position:fixed;inset:0;background:rgba(10,18,28,.42);z-index:35;backdrop-filter:blur(2px)}
+
+/* ── 예측 페이지 ───────────────────────────────────────────────── */
+.pick{display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap}
+.pick input[type=date]{min-width:172px;font-size:14px;padding:8px 10px}
+.jump{display:flex;gap:4px;flex-wrap:wrap}
+.lede{max-width:88ch;font-size:12.5px;color:var(--text-2);line-height:1.85;margin:0}
+.lede b{color:var(--text);font-weight:600}
+.kind{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;font-size:11.5px;
+  font-weight:600;white-space:nowrap;border:1px solid transparent}
+.kind-plain{background:var(--surface-3);color:var(--text-2);border-color:var(--border-2)}
+.kind-week{background:var(--surface-3);color:var(--text-3);border-color:var(--border-2)}
+.kind-holi{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+.kind-fest{background:var(--brand-50);color:var(--brand);border-color:var(--brand-line)}
+.hero{display:grid;grid-template-columns:auto minmax(0,1fr);gap:26px;align-items:end}
+@media (max-width:680px){.hero{grid-template-columns:1fr;gap:16px}}
+.hero .big{font-family:var(--mono);font-size:44px;font-weight:700;letter-spacing:-.035em;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--brand)}
+.hero .big-k{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;
+  font-weight:600;margin-bottom:8px}
+.hero .big-s{font-size:12px;color:var(--text-2);margin-top:8px}
+.hero .big-s b{color:var(--crit);font-weight:700}
+.decomp{width:100%;min-width:0;border-collapse:collapse;font-size:12.5px}
+.decomp td{padding:8px 0;border-bottom:1px solid var(--border)}
+.decomp td:first-child{color:var(--text-2)}
+.decomp td.op{width:30px;text-align:center;color:var(--text-3);font-family:var(--mono);font-size:11px}
+.decomp td:last-child{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.decomp tr.off td{color:var(--text-3)}
+.decomp tr.res td{border-bottom:0;border-top:2px solid var(--border-2);font-weight:700;padding-top:10px}
+.decomp tr.res td:last-child{color:var(--brand);font-size:15px}
+.decomp .why{display:block;font-size:11px;color:var(--text-3);font-weight:400;margin-top:2px}
+.basis h4{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;
+  font-weight:600;margin-bottom:11px}
+.basis table{width:100%;border-collapse:collapse;font-size:12.5px}
+.basis td{padding:6px 0;border-bottom:1px solid var(--border)}
+.basis td:first-child{color:var(--text-2)}
+.basis td:last-child{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.basis tr.eq td{border-bottom:0;border-top:2px solid var(--border-2);font-weight:700;padding-top:9px}
+.basis tr.eq td:last-child{color:var(--brand)}
+.basis p{margin:12px 0 0;font-size:11.5px;color:var(--text-3);line-height:1.8}
+.tag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;letter-spacing:.02em;
+  background:var(--brand-50);color:var(--brand);border:1px solid var(--brand-line);white-space:nowrap}
+.flag{display:flex;gap:11px;align-items:flex-start;padding:13px 16px;border-radius:var(--r-sm);
+  background:var(--crit-bg);border:1px solid var(--crit-line);color:var(--crit);font-size:12.5px;line-height:1.75}
+.flag b{font-weight:700}
+.flag .dot{flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--crit);margin-top:7px}
+.notes{margin:0;padding:0 0 0 18px;font-size:11.5px;color:var(--text-2);line-height:1.85}
+.notes li{margin:0;padding-left:3px}
+.notes li::marker{color:var(--text-3)}
+.meth{margin:12px 0 0;font-size:11px;color:var(--text-3);font-family:var(--mono);line-height:1.7}
+.empty-note{padding:40px 0;color:var(--text-3);font-size:13px}
+.fc-wrap{display:grid;grid-template-columns:1.55fr minmax(0,1fr);gap:0}
+.fc-wrap>*{min-width:0;padding:16px}
+.fc-wrap>*+*{border-left:1px solid var(--border)}
+@media (max-width:1040px){.fc-wrap{grid-template-columns:1fr}
+  .fc-wrap>*+*{border-left:0;border-top:1px solid var(--border)}}
+
+/* ── 로딩 ──────────────────────────────────────────────────────── */
+.sk{height:36px;border-bottom:1px solid var(--border);
+  background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));
+  background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ── 2단 배치: 좌측 조회 결과 / 우측 요약 ────────────────────────
+   표가 넓으므로 우측 요약 폭을 고정하고 좌측이 남는 폭을 전부 갖는다.
+   좁은 화면에서는 결과 → 요약 순으로 쌓인다. */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 332px;gap:18px;align-items:start}
+@media (max-width:1140px){.cols{grid-template-columns:1fr}}
+.cols>.card{min-width:0}
+/* 우측 요약 컬럼은 차트를 세로로 쌓는다 */
+.stackplots{display:grid}
+.stackplots>*{min-width:0;padding:14px 16px}
+.stackplots>*+*{border-top:1px solid var(--border)}
+/* 우측 요약의 지표 타일은 2열 고정. 홀수 개일 때 마지막 타일이 빈칸을 남기지 않게 한다 */
+.cols>.card .figs{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cols>.card .figs .fig:last-child{grid-column:1/-1}
+
+/* ── 조건 추천 ──────────────────────────────────────────────────────── */
+.sgbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--brand-50);border:1px solid var(--brand-line);
+  border-radius:var(--r);padding:9px 12px;margin:0 0 15px}
+.sgbar label{font-size:11.5px;font-weight:700;color:var(--brand);
+  letter-spacing:.02em;white-space:nowrap}
+.sgbar input{flex:1 1 280px;min-width:0;font:inherit;font-size:12.5px;color:var(--text);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:6px 9px}
+.sgbar input:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+.sgbar .btn{white-space:nowrap}
+.sgmsg{font-size:11.5px;line-height:1.75;color:var(--text-2);word-break:keep-all;
+  margin:-7px 0 15px;padding:0 2px;max-width:92ch}
+.sgmsg b{color:var(--text);font-weight:600}
+.sgmsg .nt{display:block;color:var(--text-3)}
+.sgmsg .er{color:var(--crit)}
+
+/* ── 분석 보기 (index.html#analysis) ───────────────────────────────
+   assets/analysis.js 가 그린다. 조회 보기와 같은 DATA 를 쓴다. */
+
+.brief{margin:0;padding:0 0 0 18px;display:grid;gap:4px;font-size:12.5px;color:var(--text-2);line-height:1.8}
+.brief b{color:var(--text);font-weight:600}
+.brief .hot{color:var(--crit);font-weight:700}
+.an2{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+.an2.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1140px){.an2,.an2.even{grid-template-columns:1fr}}
+.pick>.f:first-child{flex:1 1 300px}
+.pick .in input[type=date]{min-width:0;flex:1 1 0}
+#trend{overflow-x:auto}
+.trend svg{display:block;width:100%;min-width:640px;height:auto}
+.trend .hit{cursor:pointer}
+.dayp .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.dayp .bign{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em}
+.dayp .lx{font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600}
+.dayp .lx.calm{color:var(--text-3)}
+.lift{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:999px;white-space:nowrap}
+.lift.up{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit-line)}
+.lift.eq{background:var(--surface-3);color:var(--text-3);border:1px solid var(--border)}
+.quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+@media (max-width:760px){.quad{grid-template-columns:1fr}}
+.q{background:var(--surface);padding:12px 14px;min-width:0}
+.q h4{font-size:12px;font-weight:700;margin:0}
+.q .act{font-size:11px;color:var(--text-3);margin:2px 0 10px}
+.q.hot h4{color:var(--warn)}
+.q .row{display:grid;grid-template-columns:86px minmax(0,1fr) 44px 40px;gap:8px;align-items:center;font-size:12px;padding:3px 0}
+.q .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .row .tr{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.q .row .tr i{display:block;height:100%;border-radius:3px;background:var(--brand)}
+.q.hot .row .tr i{background:var(--warn)}
+.q .row .c{font-family:var(--mono);text-align:right;font-size:11px;color:var(--text-2)}
+.q .empty{font-size:11.5px;color:var(--text-3)}
+table.heat{border-collapse:separate;border-spacing:2px;min-width:640px;width:100%;font-size:11px}
+.heat th{font-weight:500;color:var(--text-3);font-family:var(--mono);font-size:10px;padding:2px 0 4px;white-space:nowrap}
+.heat th.run{color:var(--warn);font-weight:700}
+.heat th.dn{font-family:var(--ui);font-size:12px;color:var(--text);text-align:left;padding-right:8px;font-weight:500}
+.heat td{height:30px;text-align:center;border-radius:3px;font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.heat td.tot{background:none;text-align:right;color:var(--text-2);padding-left:8px;white-space:nowrap}
+.heat td.tot b{color:var(--crit)}
+.scale{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin-top:10px}
+.scale span.sw{display:inline-flex;gap:2px}
+.scale span.sw i{width:20px;height:10px;display:block}
+.dbar{display:inline-block;height:6px;border-radius:3px;vertical-align:middle}
+.kwcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+@media (max-width:760px){.kwcols{grid-template-columns:1fr}}
+.kwcols h4{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin:0 0 10px}
+.rise{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 10px;border-radius:var(--r-sm);
+  background:var(--surface-2);border:1px solid var(--border);font-size:12px;margin-bottom:5px}
+.rise .g{font-family:var(--mono);font-weight:700;color:var(--crit);white-space:nowrap}
+.rise .g.new{color:var(--warn)}
+.rise .s{font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.an-chips{display:flex;gap:2px;flex-wrap:wrap}
+.an-chips button{background:none;border:1px solid transparent;padding:4px 11px;border-radius:999px;cursor:pointer;
+  font-size:12px;color:var(--text-2)}
+.an-chips button:hover{background:var(--surface-3);color:var(--text)}
+.an-chips button[aria-pressed=true]{background:var(--brand-50);border-color:var(--brand-line);color:var(--brand);font-weight:600}
+
+/* 대응 방안 — 조치 계획표 */
+table.plan{width:100%;min-width:900px;border-collapse:collapse;font-size:12.5px}
+.plan th{font-size:10.5px;font-weight:600;color:var(--text-3);text-align:left;padding:8px 12px;
+  border-bottom:1px solid var(--border-2);background:var(--surface-2);white-space:nowrap}
+.plan td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.plan tr.pl:hover td,.plan tr.open td{background:var(--surface-2)}
+.plan .pr{font-size:11px;font-weight:700;white-space:nowrap}
+.plan .pr i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.plan .pr.crit{color:var(--crit)} .plan .pr.crit i{background:var(--crit)}
+.plan .pr.warn{color:var(--warn)} .plan .pr.warn i{background:var(--warn)}
+.plan .pr.plain{color:var(--text-3)} .plan .pr.plain i{background:var(--border-2)}
+.plan button.is{background:none;border:0;padding:4px 0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;white-space:nowrap}
+.plan button.is::after{content:' ▸';font-size:9px;color:var(--text-3)}
+.plan button.is[aria-expanded=true]::after{content:' ▾'}
+.plan button.is:hover{color:var(--brand)}
+.plan .num{font-family:var(--mono);white-space:nowrap;color:var(--text-2)}
+.plan .num b{font-size:14px;color:var(--text);font-weight:600}
+.plan .num s{text-decoration:none;color:var(--text-3)}
+.plan .ac{color:var(--text)}
+.plan .ac b{font-weight:700}
+.plan .mt{color:var(--text-2);font-size:11.5px;white-space:nowrap}
+.plan .gt{text-align:right}
+.plan .ago{background:none;border:0;padding:4px 0;font:inherit;font-size:11px;color:var(--brand);cursor:pointer;white-space:nowrap}
+.plan .ago:hover{text-decoration:underline}
+.plan tr.pd td{background:var(--surface-2);padding:2px 12px 14px;border-bottom:1px solid var(--border)}
+.plan tr.pd p{margin:6px 0 0;font-size:12px;line-height:1.7;color:var(--text-2);white-space:normal;max-width:900px}
+.plan tr.pd b{color:var(--text)}
+.spark{position:relative;display:inline-block;width:64px;height:6px;margin-left:8px;vertical-align:middle;
+  background:var(--surface-3);border-radius:3px;overflow:hidden}
+.spark i,.spark u{position:absolute;left:0;top:0;bottom:0;border-radius:3px;text-decoration:none}
+.spark.crit i{background:var(--crit)} .spark.warn i{background:var(--warn)}
+.spark u{background:var(--text-3)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--brand-line)}100%{box-shadow:var(--shadow)}}
+.card.flash{animation:flash 1.6s ease-out}
+
+/* ═══ 분석 화면 — 시각 정리 ═════════════════════════════════════════
+   문제는 정보가 아니라 밀도와 대비였다. 숫자가 전부 같은 크기·같은
+   색으로 늘어서 있어 무엇부터 봐야 할지 알 수 없었다.
+   셋을 바꾼다.
+     1) 명절·급증은 주황, 상시는 파랑, 악화는 빨강으로 의미를 색에 싣는다
+     2) 읽는 순서를 크기로 만든다 — 지표 → 요약 → 차트 → 조치
+     3) 조치는 표가 아니라 카드로 끊어 우선순위를 먼저 보이게 한다 */
+
+:root{
+  /* 주황이 탁해 '명절'이 눈에 띄지 않았다. 한 단계 선명하게. */
+  --warn:#b45309; --warn-bg:#fff6e8; --warn-line:#f0cf9c;
+  --crit:#b32020; --crit-bg:#fdeeee; --crit-line:#f0c4c4;
+  --ok:#14663c; --ok-bg:#e6f4ec;
+  --text-2:#4d5f74; --text-3:#78899d;      /* 본문 대비 보강 */
+}
+:root[data-theme="dark"]{
+  --warn:#e4a85e; --warn-bg:#2e2416; --warn-line:#53401f;
+  --crit:#e68c8c; --crit-bg:#2e1919; --crit-line:#543030;
+  --text-2:#a6b8cc; --text-3:#7c8fa6;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --warn:#e4a85e; --warn-bg:#2e2416; --warn-line:#53401f;
+  --crit:#e68c8c; --crit-bg:#2e1919; --crit-line:#543030;
+  --text-2:#a6b8cc; --text-3:#7c8fa6;
+}}
+
+/* ── 요약 지표 ──────────────────────────────────────────────────── */
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;margin-bottom:15px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:9px;
+  padding:15px 17px;box-shadow:var(--shadow);min-width:0}
+.kpi .k{font-size:11.5px;font-weight:600;color:var(--text-2);letter-spacing:.01em}
+.kpi .v{font-family:var(--mono);font-size:29px;font-weight:700;line-height:1.15;
+  letter-spacing:-.02em;color:var(--text);margin:7px 0 5px;white-space:nowrap}
+.kpi .s{font-size:11px;line-height:1.5;color:var(--text-3)}
+.kpi .s b{color:var(--text-2);font-weight:600}
+.kpi .s em{font-style:normal;font-weight:700;white-space:nowrap}
+.kpi .s em.bad{color:var(--crit)}
+.kpi .s em.good{color:var(--ok)}
+.kpi .s em.up,.kpi .s em.evt{color:var(--warn)}
+.kpi.bad{border-color:var(--crit-line)}
+.kpi.bad .v{color:var(--crit)}
+.kpi.evt{background:var(--warn-bg);border-color:var(--warn-line)}
+.kpi.evt .v{color:var(--warn)}
+@media (max-width:1280px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:720px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ── 자동 요약 ──────────────────────────────────────────────────── */
+.sumbar{display:flex;gap:12px;align-items:flex-start;background:var(--warn-bg);
+  border:1px solid var(--warn-line);border-radius:9px;padding:13px 17px;margin-bottom:17px}
+.sumbar .sico{flex:none;width:19px;height:19px;border-radius:50%;background:var(--warn);
+  color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:2px}
+.sumbar .sbody{min-width:0}
+.sumbar .sbody>b{display:block;font-size:11.5px;color:var(--warn);letter-spacing:.02em}
+.sumbar .brief{margin:5px 0 0;padding-left:16px}
+.sumbar .brief li{color:var(--text-2)}
+.sumbar .brief li::marker{color:var(--warn-line)}
+
+/* ── 대응 방안 카드 ─────────────────────────────────────────────── */
+.pcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;padding:14px 16px;
+  align-items:start}   /* 한 장을 펼쳐도 같은 줄의 나머지가 늘어나지 않게 */
+@media (max-width:1380px){.pcards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1040px){.pcards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:680px){.pcards{grid-template-columns:1fr}}
+.pcard{display:flex;flex-direction:column;gap:7px;min-width:0;
+  background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--border-2);
+  border-radius:9px;padding:13px 15px 12px}
+.pcard.crit{border-top-color:var(--crit)}
+.pcard.warn{border-top-color:var(--warn)}
+.pcard .ph{display:flex;align-items:center;gap:7px}
+.pcard .ph .sp{flex:1;min-width:0}
+.pcard .ph>b{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap}
+.pchip{flex:none;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;
+  background:var(--surface-3);color:var(--text-3)}
+.pcard.crit .pchip{background:var(--crit-bg);color:var(--crit)}
+.pcard.warn .pchip{background:var(--warn-bg);color:var(--warn)}
+.pcard .pnum{font-family:var(--mono);font-size:11.5px;color:var(--text-3);
+  display:flex;align-items:center;flex-wrap:wrap;gap:3px}
+.pcard .pnum b{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.pcard.crit .pnum b{color:var(--crit)}
+.pcard.warn .pnum b{color:var(--warn)}
+.pcard .pnum s{text-decoration:none;color:var(--text-3)}
+.pcard .pact{margin:0;font-size:12.5px;line-height:1.5;color:var(--text)}
+.pcard .pact::before{content:"→ ";color:var(--text-3)}
+.pcard .pmeta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--text-2)}
+.pcard .pmeta .when{color:var(--text-3)}
+.pcard button.is{align-self:flex-start;background:none;border:0;padding:2px 0;
+  font:inherit;font-size:11px;color:var(--text-3);cursor:pointer}
+.pcard button.is::after{content:" ▸"}
+.pcard button.is[aria-expanded=true]::after{content:" ▾"}
+.pcard button.is:hover{color:var(--brand)}
+.pcard .pd{border-top:1px solid var(--border);padding-top:9px;font-size:11.5px;line-height:1.6;color:var(--text-2)}
+.pcard .pd p{margin:0 0 5px}
+.pcard .pd b{color:var(--text)}
+.pcard.open{box-shadow:var(--shadow-lg)}
+.pcard .ago{background:none;border:0;padding:0;font:inherit;font-size:10.5px;
+  color:var(--text-3);cursor:pointer;white-space:nowrap}
+.pcard .ago:hover{color:var(--brand);text-decoration:underline}
+
+/* 유형 지도 — 칸마다 종 수가 크게 달라 짧은 칸이 억지로 늘어나며 빈 공간이
+   생겼다. 1px 간격으로 구분선을 그리던 방식을 칸별 테두리로 바꾸고
+   늘이지 않는다. */
+.quad{gap:12px;background:none;border:0;border-radius:0;overflow:visible;align-items:start}
+.q{border:1px solid var(--border);border-radius:9px;padding:14px 16px}
+.q.hot{background:var(--warn-bg);border-color:var(--warn-line)}
+
+/* 일별 추이는 153개 막대를 담아야 해서 최소 640px 가 필요하다. 좁은 화면에서
+   페이지 전체가 밀리지 않도록 차트 영역 안에서만 가로로 움직이게 한다. */
+#an-trend{overflow-x:auto;overflow-y:hidden}
+
+/* 부서 부하 — 모수가 적은 부서는 흐리게 두고 비율 대신 '모수 부족'을 적는다.
+   한 달에 몇 건 들어오는 부서의 50% 는 비율이 아니라 잡음이다. */
+.heat tr.thin th.dn{color:var(--text-3)}
+.heat tr.thin td{opacity:.72}
+.heat th.dn em.ext{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:3px;
+  font-style:normal;font-size:9.5px;font-weight:700;background:var(--surface-3);color:var(--text-3)}
+.heat .thinnote{font-size:10.5px;color:var(--text-3);border-bottom:1px dotted var(--border-2);cursor:help}
+.heat td.tot{font-family:var(--mono);font-size:11px;text-align:right;padding-left:10px}
+
+/* ── 마스킹 표시 ────────────────────────────────────────────────────
+   무엇을 가렸는지가 눈에 띄어야 한다. 더 중요한 건 '가공했는데 표시가
+   없던 것'이다 — 접수번호는 대체키이고 등록일은 시 단위로 잘렸는데
+   화면에서는 원본처럼 보였다. */
+.tok{font-weight:600;border:1px solid var(--brand-line);padding:0 4px;border-radius:3px}
+.tok::before{content:"🔒";font-size:.85em;margin-right:3px;filter:grayscale(1) opacity(.65)}
+i.mk{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:3px;cursor:help;
+  font-style:normal;font-size:9px;font-weight:700;letter-spacing:.02em;
+  background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);vertical-align:1px}
+.mlegend{display:inline-flex;align-items:center;gap:7px;margin-left:14px;
+  font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.mlegend .tok{font-size:10px}
+.mbadge{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;margin-bottom:14px;
+  padding:9px 12px;border-radius:7px;background:var(--brand-50);border:1px solid var(--brand-line)}
+.mbadge .t{font-size:10.5px;font-weight:700;color:var(--brand)}
+.mbadge .v{font-size:12px;color:var(--text)}
+.mbadge .v b{font-weight:700}
+.mbadge .v.none{color:var(--text-3)}
+.mbadge .x{flex-basis:100%;font-size:10.5px;color:var(--text-3);margin-top:1px}
+/* 서랍은 폭이 좁다. 설명을 옆에 붙이면 한 글자씩 쪼개져 내려간다. */
+@media (max-width:900px){.mlegend{display:none}}
+
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+ <div class="side-in">
+  <div class="brand">
+    <span class="logo">CS</span>
+    <span class="bn"><b>민원 조회 콘솔</b><em>CS-MST</em></span>
+  </div>
+  <nav class="snav">
+    <span class="grp">업무</span>
+    <a href="index.html#search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="index.html#analysis"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 13.5V8M6.5 13.5V3M10.5 13.5V6.5M14 13.5H1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>민원 분석</a>
+    <a href="forecast.html" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5l3.5-4 2.8 2.4L14 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 4.5H14v3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>민원 예측</a>
+  </nav>
+  <div class="side-foot" id="src"><span class="lbl">데이터</span>불러오는 중…</div>
+ </div>
+</aside>
+<main class="main">
+  <header class="phead">
+    <div>
+      <h2>민원 예측</h2>
+      <p>데이터가 들어온 마지막 날 이후의 날짜를 고르면 요일·시기·공휴일을 분해해 접수량을 예측합니다. 명절은 같은 명절 실적으로 투영합니다.</p>
+    </div>
+    <div class="phead-act" id="phead-act"></div>
+  </header>
+  <div class="content">
+<section class="card">
+    <div class="card-hd"><h3>예측할 날짜</h3><span class="sp"></span>
+      <span class="sub" id="range-hint"></span></div>
+    <div class="card-bd">
+    <div class="pick">
+      <div class="f"><label for="pd">날짜</label>
+        <div class="in"><input type="date" id="pd"></div></div>
+      <div class="f"><label>바로가기</label>
+        <div class="jump" id="jump"></div></div>
+    </div>
+    <p class="lede" id="lede" style="margin-top:16px"></p>
+    </div>
+  </section>
+
+  <div id="out"></div>
+  </div>
+</main>
+</div>
+
+<script>
+/* 민원 조회 콘솔 — 두 페이지가 공유하는 유틸 */
+'use strict';
+
+const COLS = ["접수번호","민원유형","유입경로","등록일","접수일","처리기한","완료일","고객요구유형",
+              "제목","질문","답변","상위완료유형","완료유형","처리부서","처리자"];
+const DW = '월화수목금토일';
+
+const $ = id => document.getElementById(id);
+const nf = n => Number(n).toLocaleString('ko-KR');
+const day = s => (s || '').slice(0, 10);
+
+function esc(s){
+  return (s == null ? '' : String(s)).replace(/[&<>"]/g, m =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+}
+/* 마스킹 토큰 <이름_1> 을 강조 표시한다 */
+function tokens(s){
+  return esc(s).replace(/&lt;([^&]{1,18}?_\d+)&gt;/g, '<span class="tok">&lt;$1&gt;</span>');
+}
+/* 이 건에서 무엇을 몇 개 가렸는지 — 종류별로 센다.
+   <이름_1> 같은 토큰의 밑줄 앞부분이 종류다. 같은 번호는 같은 값을
+   가리키므로 중복은 하나로 센다. */
+function maskSummary(r){
+  const seen = new Map();
+  for (const col of ['제목', '질문', '답변']){
+    const t = r[col] || '';
+    const re = /<([^<>]{1,18}?)_(\d+)>/g;
+    let m;
+    while ((m = re.exec(t))){
+      const kind = m[1];
+      if (!seen.has(kind)) seen.set(kind, new Set());
+      seen.get(kind).add(m[2]);
+    }
+  }
+  return [...seen].map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]);
+}
+function dowOf(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return DW[(d.getDay() + 6) % 7];
+}
+
+/* 처리기한 경과 여부로 상태를 판정한다 */
+function status(r){
+  if (r['완료일']) return (day(r['완료일']) > day(r['처리기한'])) ? ['기한초과','over'] : ['완료','done'];
+  return ['미완료','open'];
+}
+
+/* RFC4180 — 질문·답변 본문에 쉼표와 줄바꿈이 들어있어 따옴표 처리가 필수다 */
+function parseCSV(text){
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){
+      if (c === '"'){ if (text[i+1] === '"'){ f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ','){ row.push(f); f = ''; }
+    else if (c === '\n'){ row.push(f); f = ''; rows.push(row); row = []; }
+    else if (c !== '\r') f += c;
+  }
+  if (f.length || row.length){ row.push(f); rows.push(row); }
+  if (!rows.length) return [];
+  const head = rows[0].map(h => h.trim());
+  return rows.slice(1).filter(r => r.length > 1)
+    .map(r => { const o = {}; head.forEach((h, i) => o[h] = (r[i] ?? '').trim()); return o; });
+}
+function toCSV(rows, cols){
+  const q = v => { v = v == null ? '' : String(v);
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const out = [cols.join(',')];
+  for (const r of rows) out.push(cols.map(c => q(r[c])).join(','));
+  return '﻿' + out.join('\r\n') + '\r\n';   /* BOM 이 없으면 엑셀에서 한글이 깨진다 */
+}
+
+/* 파일 저장 — 아티팩트 뷰어에서는 뷰어가 중재하고, 일반 웹에서는 브라우저가 직접 받는다 */
+let SAVER = null;
+(async () => { try { SAVER = await window.claude?.use?.('downloads'); } catch (e) { SAVER = null; } })();
+const SAVE_MSG = {
+  declined:'저장을 취소했습니다.', too_large:'파일이 너무 큽니다. 범위를 좁혀 주세요.',
+  rate_limited:'저장 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+  rejected_extension:'이 형식은 저장할 수 없습니다.', bad_request:'저장 요청이 잘못되었습니다.'
+};
+async function saveFile(name, text, mime){
+  const blob = new Blob([text], {type: mime || 'text/csv'});
+  if (SAVER){
+    const r = await SAVER.save({ filename: name, data: blob });
+    return r.status === 'delivered' ? '전달했습니다.' : '저장했습니다.';
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return '브라우저 다운로드를 확인하세요.';
+}
+function saveError(err){
+  return SAVE_MSG[(err && err.code) || ''] || '저장할 수 없습니다. 복사를 사용해 주세요.';
+}
+async function copyText(text, btn, label){
+  try { await navigator.clipboard.writeText(text); btn.textContent = '복사됨'; }
+  catch (e) { btn.textContent = '복사 실패'; }
+  setTimeout(() => { btn.textContent = label; }, 1800);
+}
+
+/* 다운로드 이력 — 운영계에서는 서버 로그여야 한다 (안전성 확보조치 기준 제8조) */
+const HK = 'cs-dl-hist';
+const readHist = () => { try { return JSON.parse(localStorage.getItem(HK) || '[]'); } catch (e) { return []; } };
+function pushHist(entry){
+  const h = readHist();
+  h.unshift(Object.assign({ t:new Date().toISOString() }, entry));
+  try { localStorage.setItem(HK, JSON.stringify(h.slice(0, 30))); } catch (e) {}
+  return h;
+}
+function stamp(iso){
+  const d = new Date(iso), p = v => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `
+       + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/* 데이터 로드 — 모든 페이지가 같은 경로를 본다
+   서버·GitHub Pages 에서는 fetch() 로 읽는다. index.html 을 더블클릭해 file:// 로 열면
+   브라우저가 fetch() 를 막으므로, 그때만 tools/embed_data.py 가 만든 같은 이름의 .js 를
+   <script> 로 불러온다. 서버에서는 .js 를 받지 않아 6.5MB 를 두 번 내려받지 않는다. */
+function loadEmbedded(path){
+  window.__EMBED = window.__EMBED || {};
+  if (path in window.__EMBED) return Promise.resolve(window.__EMBED[path]);
+  return new Promise(res => {
+    const s = document.createElement('script');
+    s.src = path.replace(/\.(csv|json)$/, '.js'); s.charset = 'utf-8';
+    s.onload = () => res(window.__EMBED[path] ?? null);
+    s.onerror = () => res(null);
+    document.head.appendChild(s);
+  });
+}
+async function readText(path){
+  try { const r = await fetch(path); if (r.ok) return await r.text(); } catch (e) {}
+  return loadEmbedded(path);
+}
+async function loadCSV(path){
+  const t = await readText(path);
+  return t == null ? null : parseCSV(t);
+}
+async function loadJSON(path){
+  const t = await readText(path);
+  try { return t == null ? null : JSON.parse(t); } catch (e) { return null; }
+}
+
+</script>
+<script>
+/* 오프라인 묶음 — 두 가지만 바꾼다.
+   1) readText 가 파일 대신 아래 문자열을 돌려준다
+   2) /api/* 를 부르지 않게 해 정적 모드로 고정한다
+   화면 로직은 그대로다. */
+const OFFLINE_FILES = {"data/model.json": "{\n \"generatedAt\": \"2026-11-24 19:13:12\",\n \"method\": \"기준선 × 요일 × 시기(월) × 명절·공휴일 계수. 명절은 상대일 프로파일 투영. 머신러닝 아님.\",\n \"privacy\": {\n  \"input\": \"masked_seasonal.csv\",\n  \"auditResiduals\": 0,\n  \"columnsUsed\": [\n   \"등록일\",\n   \"민원유형\",\n   \"처리부서\",\n   \"처리기한\",\n   \"완료일\"\n  ],\n  \"textColumnsRead\": false,\n  \"note\": \"예측은 마스킹을 통과한 파일만 입력으로 받으며, 제목·질문·답변 본문은 읽지 않는다.\"\n },\n \"source\": {\n  \"rows\": 11644,\n  \"from\": \"2026-09-01\",\n  \"to\": \"2027-01-31\",\n  \"days\": 153,\n  \"normalDays\": 93\n },\n \"baseline\": {\n  \"anchor\": \"2026-09-01\",\n  \"intercept\": 50.2014,\n  \"slopePerDay\": 0.0484,\n  \"atStart\": 50.2,\n  \"atEnd\": 57.6\n },\n \"dow\": {\n  \"0\": 1.3511,\n  \"1\": 1.2135,\n  \"2\": 1.1405,\n  \"3\": 1.1193,\n  \"4\": 1.1337,\n  \"5\": 0.5913,\n  \"6\": 0.477\n },\n \"month\": {\n  \"1\": {\n   \"f\": 1.0252,\n   \"raw\": 1.0252,\n   \"n\": 15,\n   \"applied\": true\n  },\n  \"9\": {\n   \"f\": 1.0,\n   \"raw\": 0.9192,\n   \"n\": 3,\n   \"applied\": false\n  },\n  \"10\": {\n   \"f\": 0.9952,\n   \"raw\": 0.9952,\n   \"n\": 24,\n   \"applied\": true\n  },\n  \"11\": {\n   \"f\": 1.0029,\n   \"raw\": 1.0029,\n   \"n\": 30,\n   \"applied\": true\n  },\n  \"12\": {\n   \"f\": 0.9938,\n   \"raw\": 0.9938,\n   \"n\": 21,\n   \"applied\": true\n  }\n },\n \"monthMinObs\": 8,\n \"publicHoliday\": {\n  \"factor\": 0.531,\n  \"n\": 4,\n  \"catchupFactor\": 1.687,\n  \"catchupN\": 4,\n  \"observed\": [\n   \"2026-10-03\",\n   \"2026-10-09\",\n   \"2026-12-25\",\n   \"2027-01-01\"\n  ],\n  \"catchupObserved\": [\n   \"2026-10-05\",\n   \"2026-10-12\",\n   \"2026-12-28\",\n   \"2027-01-04\"\n  ]\n },\n \"festival\": {\n  \"anchorName\": \"추석\",\n  \"anchorDate\": \"2026-09-25\",\n  \"anchorRange\": [\n   \"2026-09-24\",\n   \"2026-09-27\"\n  ],\n  \"relFrom\": -21,\n  \"relTo\": 10,\n  \"holidayRels\": [\n   -1,\n   0,\n   1,\n   2\n  ],\n  \"contaminatedRels\": [\n   8,\n   10\n  ],\n  \"uplift\": {\n   \"-21\": 1.1388,\n   \"-20\": 1.3423,\n   \"-19\": 1.6208,\n   \"-18\": 2.3454,\n   \"-17\": 2.7393,\n   \"-16\": 3.2064,\n   \"-15\": 2.9641,\n   \"-14\": 2.419,\n   \"-13\": 1.5667,\n   \"-12\": 1.4036,\n   \"-11\": 1.194,\n   \"-10\": 1.0528,\n   \"-9\": 0.8781,\n   \"-8\": 0.8237,\n   \"-7\": 0.9681,\n   \"-6\": 1.1259,\n   \"-5\": 1.8454,\n   \"-4\": 2.3866,\n   \"-3\": 3.1857,\n   \"-2\": 3.814,\n   \"-1\": 5.0473,\n   \"0\": 5.4125,\n   \"1\": 5.2518,\n   \"2\": 3.595,\n   \"3\": 3.2618,\n   \"4\": 2.8451,\n   \"5\": 2.1578,\n   \"6\": 1.9813,\n   \"7\": 1.9029,\n   \"8\": 1.7038,\n   \"9\": 1.5047,\n   \"10\": 1.5047\n  },\n  \"actual\": {\n   \"-21\": {\n    \"date\": \"2026-09-04\",\n    \"dow\": 4,\n    \"n\": 65,\n    \"contaminated\": false\n   },\n   \"-20\": {\n    \"date\": \"2026-09-05\",\n    \"dow\": 5,\n    \"n\": 40,\n    \"contaminated\": false\n   },\n   \"-19\": {\n    \"date\": \"2026-09-06\",\n    \"dow\": 6,\n    \"n\": 39,\n    \"contaminated\": false\n   },\n   \"-18\": {\n    \"date\": \"2026-09-07\",\n    \"dow\": 0,\n    \"n\": 160,\n    \"contaminated\": false\n   },\n   \"-17\": {\n    \"date\": \"2026-09-08\",\n    \"dow\": 1,\n    \"n\": 168,\n    \"contaminated\": false\n   },\n   \"-16\": {\n    \"date\": \"2026-09-09\",\n    \"dow\": 2,\n    \"n\": 185,\n    \"contaminated\": false\n   },\n   \"-15\": {\n    \"date\": \"2026-09-10\",\n    \"dow\": 3,\n    \"n\": 168,\n    \"contaminated\": false\n   },\n   \"-14\": {\n    \"date\": \"2026-09-11\",\n    \"dow\": 4,\n    \"n\": 139,\n    \"contaminated\": false\n   },\n   \"-13\": {\n    \"date\": \"2026-09-12\",\n    \"dow\": 5,\n    \"n\": 47,\n    \"contaminated\": false\n   },\n   \"-12\": {\n    \"date\": \"2026-09-13\",\n    \"dow\": 6,\n    \"n\": 34,\n    \"contaminated\": false\n   },\n   \"-11\": {\n    \"date\": \"2026-09-14\",\n    \"dow\": 0,\n    \"n\": 82,\n    \"contaminated\": false\n   },\n   \"-10\": {\n    \"date\": \"2026-09-15\",\n    \"dow\": 1,\n    \"n\": 65,\n    \"contaminated\": false\n   },\n   \"-9\": {\n    \"date\": \"2026-09-16\",\n    \"dow\": 2,\n    \"n\": 51,\n    \"contaminated\": false\n   },\n   \"-8\": {\n    \"date\": \"2026-09-17\",\n    \"dow\": 3,\n    \"n\": 47,\n    \"contaminated\": false\n   },\n   \"-7\": {\n    \"date\": \"2026-09-18\",\n    \"dow\": 4,\n    \"n\": 56,\n    \"contaminated\": false\n   },\n   \"-6\": {\n    \"date\": \"2026-09-19\",\n    \"dow\": 5,\n    \"n\": 34,\n    \"contaminated\": false\n   },\n   \"-5\": {\n    \"date\": \"2026-09-20\",\n    \"dow\": 6,\n    \"n\": 45,\n    \"contaminated\": false\n   },\n   \"-4\": {\n    \"date\": \"2026-09-21\",\n    \"dow\": 0,\n    \"n\": 165,\n    \"contaminated\": false\n   },\n   \"-3\": {\n    \"date\": \"2026-09-22\",\n    \"dow\": 1,\n    \"n\": 198,\n    \"contaminated\": false\n   },\n   \"-2\": {\n    \"date\": \"2026-09-23\",\n    \"dow\": 2,\n    \"n\": 223,\n    \"contaminated\": false\n   },\n   \"-1\": {\n    \"date\": \"2026-09-24\",\n    \"dow\": 3,\n    \"n\": 259,\n    \"contaminated\": false\n   },\n   \"0\": {\n    \"date\": \"2026-09-25\",\n    \"dow\": 4,\n    \"n\": 278,\n    \"contaminated\": false\n   },\n   \"1\": {\n    \"date\": \"2026-09-26\",\n    \"dow\": 5,\n    \"n\": 270,\n    \"contaminated\": false\n   },\n   \"2\": {\n    \"date\": \"2026-09-27\",\n    \"dow\": 6,\n    \"n\": 185,\n    \"contaminated\": false\n   },\n   \"3\": {\n    \"date\": \"2026-09-28\",\n    \"dow\": 0,\n    \"n\": 227,\n    \"contaminated\": false\n   },\n   \"4\": {\n    \"date\": \"2026-09-29\",\n    \"dow\": 1,\n    \"n\": 178,\n    \"contaminated\": false\n   },\n   \"5\": {\n    \"date\": \"2026-09-30\",\n    \"dow\": 2,\n    \"n\": 127,\n    \"contaminated\": false\n   },\n   \"6\": {\n    \"date\": \"2026-10-01\",\n    \"dow\": 3,\n    \"n\": 114,\n    \"contaminated\": false\n   },\n   \"7\": {\n    \"date\": \"2026-10-02\",\n    \"dow\": 4,\n    \"n\": 111,\n    \"contaminated\": false\n   },\n   \"8\": {\n    \"date\": \"2026-10-03\",\n    \"dow\": 5,\n    \"n\": 23,\n    \"contaminated\": true\n   },\n   \"9\": {\n    \"date\": \"2026-10-04\",\n    \"dow\": 6,\n    \"n\": 37,\n    \"contaminated\": false\n   },\n   \"10\": {\n    \"date\": \"2026-10-05\",\n    \"dow\": 0,\n    \"n\": 108,\n    \"contaminated\": true\n   }\n  },\n  \"booking\": {\n   \"anchor\": {\n    \"window\": [\n     \"2026-09-06\",\n     \"2026-09-12\"\n    ],\n    \"n\": 906,\n    \"lift\": 2.549\n   },\n   \"target\": {\n    \"window\": [\n     \"2027-01-03\",\n     \"2027-01-09\"\n    ],\n    \"n\": 1235,\n    \"lift\": 2.688\n   },\n   \"growth\": 1.0546,\n   \"targetFestival\": \"설\"\n  }\n },\n \"holidays\": [\n  {\n   \"date\": \"2027-01-01\",\n   \"name\": \"신정\"\n  },\n  {\n   \"date\": \"2027-02-06\",\n   \"name\": \"설날 연휴\"\n  },\n  {\n   \"date\": \"2027-02-07\",\n   \"name\": \"설날\"\n  },\n  {\n   \"date\": \"2027-02-08\",\n   \"name\": \"설날 연휴\"\n  },\n  {\n   \"date\": \"2027-02-09\",\n   \"name\": \"대체공휴일(설날)\"\n  },\n  {\n   \"date\": \"2027-03-01\",\n   \"name\": \"삼일절\"\n  },\n  {\n   \"date\": \"2027-05-05\",\n   \"name\": \"어린이날\"\n  },\n  {\n   \"date\": \"2027-05-13\",\n   \"name\": \"부처님오신날\"\n  },\n  {\n   \"date\": \"2027-06-06\",\n   \"name\": \"현충일\"\n  },\n  {\n   \"date\": \"2027-08-15\",\n   \"name\": \"광복절\"\n  },\n  {\n   \"date\": \"2027-08-16\",\n   \"name\": \"대체공휴일(광복절)\"\n  },\n  {\n   \"date\": \"2027-09-14\",\n   \"name\": \"추석 연휴\"\n  },\n  {\n   \"date\": \"2027-09-15\",\n   \"name\": \"추석\"\n  },\n  {\n   \"date\": \"2027-09-16\",\n   \"name\": \"추석 연휴\"\n  },\n  {\n   \"date\": \"2027-10-03\",\n   \"name\": \"개천절\"\n  },\n  {\n   \"date\": \"2027-10-04\",\n   \"name\": \"대체공휴일(개천절)\"\n  },\n  {\n   \"date\": \"2027-10-09\",\n   \"name\": \"한글날\"\n  },\n  {\n   \"date\": \"2027-10-11\",\n   \"name\": \"대체공휴일(한글날)\"\n  },\n  {\n   \"date\": \"2027-12-25\",\n   \"name\": \"성탄절\"\n  },\n  {\n   \"date\": \"2027-12-27\",\n   \"name\": \"대체공휴일(성탄절)\"\n  }\n ],\n \"festivals\": [\n  {\n   \"name\": \"설\",\n   \"dday\": \"2027-02-07\",\n   \"range\": [\n    \"2027-02-06\",\n    \"2027-02-09\"\n   ]\n  },\n  {\n   \"name\": \"추석\",\n   \"dday\": \"2027-09-15\",\n   \"range\": [\n    \"2027-09-14\",\n    \"2027-09-16\"\n   ]\n  }\n ],\n \"band\": 0.22,\n \"validation\": {\n  \"normalMape\": 5.7,\n  \"normalDays\": 93,\n  \"worstDate\": \"2027-01-10\",\n  \"worstErrPct\": 27.2\n },\n \"mix\": {\n  \"festivalTypes\": [\n   {\n    \"k\": \"귀성표예매\",\n    \"n\": 433,\n    \"share\": 11.0\n   },\n   {\n    \"k\": \"반환위약금\",\n    \"n\": 311,\n    \"share\": 7.9\n   },\n   {\n    \"k\": \"임시열차\",\n    \"n\": 300,\n    \"share\": 7.6\n   },\n   {\n    \"k\": \"명절수하물\",\n    \"n\": 294,\n    \"share\": 7.5\n   },\n   {\n    \"k\": \"귀성지연\",\n    \"n\": 278,\n    \"share\": 7.1\n   },\n   {\n    \"k\": \"차량고장\",\n    \"n\": 196,\n    \"share\": 5.0\n   },\n   {\n    \"k\": \"앱오류\",\n    \"n\": 168,\n    \"share\": 4.3\n   },\n   {\n    \"k\": \"할인적용\",\n    \"n\": 161,\n    \"share\": 4.1\n   },\n   {\n    \"k\": \"예약발권\",\n    \"n\": 150,\n    \"share\": 3.8\n   },\n   {\n    \"k\": \"입석혼잡\",\n    \"n\": 150,\n    \"share\": 3.8\n   },\n   {\n    \"k\": \"경로우대\",\n    \"n\": 146,\n    \"share\": 3.7\n   },\n   {\n    \"k\": \"단체귀성\",\n    \"n\": 145,\n    \"share\": 3.7\n   }\n  ],\n  \"normalTypes\": [\n   {\n    \"k\": \"시설\",\n    \"n\": 546,\n    \"share\": 10.8\n   },\n   {\n    \"k\": \"할인적용\",\n    \"n\": 538,\n    \"share\": 10.7\n   },\n   {\n    \"k\": \"예약발권\",\n    \"n\": 534,\n    \"share\": 10.6\n   },\n   {\n    \"k\": \"앱오류\",\n    \"n\": 518,\n    \"share\": 10.3\n   },\n   {\n    \"k\": \"차량고장\",\n    \"n\": 371,\n    \"share\": 7.4\n   },\n   {\n    \"k\": \"환불\",\n    \"n\": 367,\n    \"share\": 7.3\n   },\n   {\n    \"k\": \"단체\",\n    \"n\": 355,\n    \"share\": 7.0\n   },\n   {\n    \"k\": \"직원응대\",\n    \"n\": 354,\n    \"share\": 7.0\n   },\n   {\n    \"k\": \"지연보상\",\n    \"n\": 346,\n    \"share\": 6.9\n   },\n   {\n    \"k\": \"주차\",\n    \"n\": 339,\n    \"share\": 6.7\n   },\n   {\n    \"k\": \"분실물\",\n    \"n\": 324,\n    \"share\": 6.4\n   },\n   {\n    \"k\": \"안내화면\",\n    \"n\": 189,\n    \"share\": 3.8\n   }\n  ],\n  \"festivalDepts\": [\n   {\n    \"k\": \"영업처\",\n    \"n\": 3416,\n    \"share\": 87.0\n   },\n   {\n    \"k\": \"차량처\",\n    \"n\": 298,\n    \"share\": 7.6\n   },\n   {\n    \"k\": \"시설처\",\n    \"n\": 59,\n    \"share\": 1.5\n   },\n   {\n    \"k\": \"건축처\",\n    \"n\": 51,\n    \"share\": 1.3\n   },\n   {\n    \"k\": \"공단\",\n    \"n\": 32,\n    \"share\": 0.8\n   },\n   {\n    \"k\": \"안전보건처\",\n    \"n\": 27,\n    \"share\": 0.7\n   },\n   {\n    \"k\": \"승무처\",\n    \"n\": 26,\n    \"share\": 0.7\n   },\n   {\n    \"k\": \"경영인사처\",\n    \"n\": 19,\n    \"share\": 0.5\n   }\n  ],\n  \"normalDepts\": [\n   {\n    \"k\": \"영업처\",\n    \"n\": 4245,\n    \"share\": 84.2\n   },\n   {\n    \"k\": \"차량처\",\n    \"n\": 560,\n    \"share\": 11.1\n   },\n   {\n    \"k\": \"시설처\",\n    \"n\": 65,\n    \"share\": 1.3\n   },\n   {\n    \"k\": \"건축처\",\n    \"n\": 52,\n    \"share\": 1.0\n   },\n   {\n    \"k\": \"공단\",\n    \"n\": 38,\n    \"share\": 0.8\n   },\n   {\n    \"k\": \"경영인사처\",\n    \"n\": 30,\n    \"share\": 0.6\n   },\n   {\n    \"k\": \"안전보건처\",\n    \"n\": 29,\n    \"share\": 0.6\n   },\n   {\n    \"k\": \"승무처\",\n    \"n\": 21,\n    \"share\": 0.4\n   }\n  ]\n },\n \"ops\": {\n  \"festivalOverdue\": 52.5,\n  \"normalOverdue\": 17.0,\n  \"festivalOpen\": 18.5,\n  \"normalOpen\": 13.3,\n  \"handlePerPersonDay\": 18\n },\n \"caveats\": [\n  \"기준선·요일·월 계수는 평시 93일로 추정했다. 평시 구간 재현 오차는 평균 5.7% 다.\",\n  \"월 계수는 관측일이 8일 미만인 달에는 적용하지 않는다(1.00). 데이터가 9월~1월뿐이라 2월~8월은 모두 여기 해당한다.\",\n  \"데이터 범위(2026-09-01 ~ 2027-01-31) 밖의 기준선은 추세 외삽값이다. 멀어질수록 오차가 커진다.\",\n  \"명절 관측이 추석 1회뿐이라 상대일 프로파일은 계절 평균이 아니라 단일 표본이다. 설 실적이 쌓이면 평균으로 바꿔야 한다.\",\n  \"±구간은 평시 재현 오차에 단일 표본 투영의 불확실성을 더한 바닥값이다. 잔차만으로 계산하면 실제보다 좁게 나온다.\",\n  \"추석 연휴는 4일(D-1~D+2), 2027 추석 연휴는 3일(D-1~D+1)로 길이가 달라 투영 정확도가 떨어진다.\",\n  \"기준 명절 구간에 일반 공휴일이 끼어 오염된 상대일은 값을 버리고 양옆에서 선형 보간했다. 그 구간의 예측은 다른 날보다 근거가 약하다.\",\n  \"예매 오픈일이 바뀌면 D-30 부근 봉우리 위치가 통째로 이동한다. 실제 예매일 확정 후 재계산이 필요하다.\",\n  \"운행중지·폭설·운임 개정 같은 외생 변수는 반영하지 않는다.\"\n ]\n}"};
+async function readText(path){
+  return Object.prototype.hasOwnProperty.call(OFFLINE_FILES, path)
+    ? OFFLINE_FILES[path] : null;
+}
+window.fetch = () => Promise.reject(new Error('offline bundle'));
+</script>
+<script>
+'use strict';
+let M = null, HOL = {}, FESTS = [], CATCHUP = {}, D_MIN = null, D_MAX = '2027-12-31';
+
+/* 로컬 날짜 기준. toISOString() 은 UTC 로 바꾸므로 한국(UTC+9)에서는
+   자정이 전날로 밀려 공휴일 판정이 하루씩 어긋난다. */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+               + `-${String(d.getDate()).padStart(2, '0')}`;
+const parse = s => new Date(s + 'T00:00:00');
+const wd = d => (d.getDay() + 6) % 7;                 /* 0=월 … 6=일 */
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const dayDiff = (a, b) => Math.round((a - b) / 86400000);
+
+/* 공휴일 다음 영업일 — 주말과 연속 공휴일을 건너뛴다 */
+function nextBusiness(d){
+  let n = addDays(d, 1);
+  while (wd(n) >= 5 || HOL[iso(n)]) n = addDays(n, 1);
+  return n;
+}
+function buildCatchup(){
+  CATCHUP = {};
+  Object.keys(HOL).forEach(k => { CATCHUP[iso(nextBusiness(parse(k)))] = HOL[k]; });
+  Object.keys(HOL).forEach(k => { delete CATCHUP[k]; });   /* 공휴일 자신은 제외 */
+}
+
+/* 선택일이 어느 명절의 상대일 구간에 드는지 */
+function findFestival(d){
+  for (const f of FESTS){
+    const rel = dayDiff(d, parse(f.dday));
+    if (rel >= M.festival.relFrom && rel <= M.festival.relTo){
+      const a = parse(f.range[0]), b = parse(f.range[1]);
+      return { f, rel, inHoliday: d >= a && d <= b };
+    }
+  }
+  return null;
+}
+
+/* 모델 계산 — tools/forecast.py 의 수식을 그대로 따른다 */
+function predict(d){
+  const b = M.baseline;
+  const base = Math.max(1, b.intercept + b.slopePerDay * dayDiff(d, parse(b.anchor)));
+  const mo = M.month[String(d.getMonth() + 1)];
+  const monthF = mo ? mo.f : 1.0;
+  const monthOk = !!(mo && mo.applied);
+  const dowF = Number(M.dow[String(wd(d))] ?? 1);
+  const key = iso(d);
+  const fest = findFestival(d);
+
+  const parts = [];
+  parts.push({ k:'평시 기준선', why:`${b.anchor} 기준 추세 ${b.slopePerDay >= 0 ? '+' : ''}${b.slopePerDay}/일`,
+               v: base.toFixed(1) + ' 건/일', op:'' });
+
+  let f = base, kind, kindCls, note;
+
+  if (fest){
+    kind = `${fest.f.name} D${fest.rel > 0 ? '+' : ''}${fest.rel}` + (fest.inHoliday ? ' · 연휴' : '');
+    kindCls = 'fest';
+    if (fest.inHoliday){
+      parts.push({ k:'요일 계수', why:'연휴 중에는 적용하지 않음 — 명절 당일은 요일과 무관하게 움직인다',
+                   v:'1.00', op:'×', off:true });
+    } else {
+      f *= dowF;
+      parts.push({ k:`요일 계수 · ${DW[wd(d)]}요일`, why:'평시 실측에서 추정', v:dowF.toFixed(2), op:'×' });
+    }
+    f *= monthF;
+    parts.push({ k:`시기 계수 · ${d.getMonth() + 1}월`,
+                 why: monthOk ? `평시 ${mo.n}일 관측` : `관측 ${mo ? mo.n : 0}일 (${M.monthMinObs}일 미만) — 적용하지 않음`,
+                 v: monthF.toFixed(2), op:'×', off: !monthOk });
+    const up = Number(M.festival.uplift[String(fest.rel)] ?? 1);
+    const dirty = (M.festival.contaminatedRels || []).includes(fest.rel);
+    f *= up;
+    parts.push({ k:'명절 배수',
+                 why:`${M.festival.anchorName} ${M.festival.actual[String(fest.rel)].date} 실적에서 추정`
+                     + (dirty ? ' · 공휴일 오염으로 보간한 값' : ''),
+                 v: up.toFixed(2), op:'×' });
+    const bk = M.festival.booking;
+    if (fest.f.name === bk.targetFestival){
+      f *= bk.growth;
+      parts.push({ k:'수요 증감률', why:`예매기 실적비 (${bk.anchor.lift} → ${bk.target.lift})`,
+                   v: bk.growth.toFixed(3), op:'×' });
+      note = 'booking';
+    } else {
+      parts.push({ k:'수요 증감률', why:`${fest.f.name} 예매기는 데이터 범위 밖이라 보정하지 않음`,
+                   v:'1.000', op:'×', off:true });
+      note = 'nobooking';
+    }
+  } else {
+    f *= dowF;
+    const weekend = wd(d) >= 5;
+    parts.push({ k:`요일 계수 · ${DW[wd(d)]}요일`, why:'평시 실측에서 추정', v:dowF.toFixed(2), op:'×' });
+    f *= monthF;
+    parts.push({ k:`시기 계수 · ${d.getMonth() + 1}월`,
+                 why: monthOk ? `평시 ${mo.n}일 관측` : `관측 ${mo ? mo.n : 0}일 (${M.monthMinObs}일 미만) — 적용하지 않음`,
+                 v: monthF.toFixed(2), op:'×', off: !monthOk });
+    const ph = M.publicHoliday;
+    if (HOL[key]){
+      f *= ph.factor;
+      kind = '공휴일 · ' + HOL[key]; kindCls = 'holi';
+      parts.push({ k:'공휴일 계수', why:`${ph.n}일 관측 — 고객센터 휴무로 접수가 줄어든다`,
+                   v: ph.factor.toFixed(2), op:'×' });
+    } else if (CATCHUP[key]){
+      f *= ph.catchupFactor;
+      kind = '공휴일 다음 영업일'; kindCls = 'holi';
+      parts.push({ k:'적체 계수', why:`${ph.catchupN}일 관측 — ${CATCHUP[key]} 동안 밀린 건이 들어온다`,
+                   v: ph.catchupFactor.toFixed(2), op:'×' });
+    } else {
+      kind = weekend ? '주말' : '평일'; kindCls = weekend ? 'week' : 'plain';
+    }
+  }
+
+  const pred = Math.round(f);
+  return { pred, lo: Math.round(pred * (1 - M.band)), hi: Math.round(pred * (1 + M.band)),
+           base, parts, kind, kindCls, fest, note,
+           ratio: pred / (base * (fest && fest.inHoliday ? 1 : dowF) * monthF) };
+}
+
+/* ── 주변 ±14일 미니 차트 ─────────────────────────────────────── */
+function miniChart(sel){
+  const span = 14, pts = [];
+  for (let i = -span; i <= span; i++){
+    const d = addDays(sel, i);
+    pts.push({ d, i, p: predict(d) });
+  }
+  const W = 700, H = 150, PL = 36, PR = 10, PT = 16, PB = 26;
+  const n = pts.length, bw = (W - PL - PR) / n;
+  const mx = Math.max(...pts.map(x => x.p.pred)) * 1.1 || 1;
+  const Y = v => PT + (H - PT - PB) * (1 - v / mx);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="선택일 전후 2주 예측">`;
+  [0, Math.round(mx / 2), Math.round(mx)].forEach(t => {
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)"/>`
+      + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--text-3)">${nf(t)}</text>`; });
+  pts.forEach((x, k) => {
+    const h = Math.max(2, (H - PT - PB) * x.p.pred / mx), xx = PL + k * bw + 1;
+    const cur = x.i === 0;
+    g += `<rect x="${xx.toFixed(1)}" y="${(H - PB - h).toFixed(1)}" width="${(bw - 2).toFixed(1)}"`
+      + ` height="${h.toFixed(1)}" rx="2" fill="var(--brand)"`
+      + ` opacity="${cur ? 1 : (x.p.kindCls === 'fest' ? .5 : .24)}">`
+      + `<title>${iso(x.d)} (${DW[wd(x.d)]}) ${nf(x.p.pred)}건 · ${x.p.kind}</title></rect>`;
+    if (cur) g += `<text x="${(xx + bw / 2 - 1).toFixed(1)}" y="${(H - PB - h - 5).toFixed(1)}"`
+      + ` text-anchor="middle" font-size="10" font-weight="600" font-family="var(--mono)"`
+      + ` fill="var(--brand)">${nf(x.p.pred)}</text>`;
+    if (k % 4 === 0) g += `<text x="${(xx + bw / 2 - 1).toFixed(1)}" y="${H - 8}" text-anchor="middle"`
+      + ` font-size="9" font-family="var(--mono)" fill="var(--text-3)">${iso(x.d).slice(5)}</text>`;
+  });
+  return g + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--border-2)"/></svg>`;
+}
+
+/* ── 명절 구간: 추석 실적 대비 ─────────────────────────────────── */
+function festivalChart(fest){
+  const F = M.festival, rf = F.relFrom, rt = F.relTo;
+  const rows = [];
+  for (let r = rf; r <= rt; r++){
+    const d = addDays(parse(fest.f.dday), r);
+    rows.push({ r, d, p: predict(d).pred, a: F.actual[String(r)].n });
+  }
+  const W = 700, H = 200, PL = 38, PR = 12, PT = 18, PB = 30;
+  const n = rows.length, iw = (W - PL - PR) / (n - 1);
+  const mx = Math.max(...rows.map(x => Math.max(x.p, x.a))) * 1.08 || 1;
+  const X = i => PL + i * iw, Y = v => PT + (H - PT - PB) * (1 - v / mx);
+  const hs = rows.findIndex(x => predict(x.d).fest?.inHoliday);
+  const he = rows.map(x => !!predict(x.d).fest?.inHoliday).lastIndexOf(true);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(M.festival.anchorName)} 실적 대비 ${esc(fest.f.name)} 예측">`;
+  if (hs >= 0) g += `<rect x="${(X(hs) - iw / 2).toFixed(1)}" y="${PT}" width="${((he - hs + 1) * iw).toFixed(1)}"`
+    + ` height="${H - PT - PB}" fill="var(--brand-50)"/>`
+    + `<text x="${X((hs + he) / 2).toFixed(1)}" y="${H - PB - 5}" text-anchor="middle" font-size="9.5"`
+    + ` font-family="var(--mono)" fill="var(--brand)">${esc(fest.f.name)} 연휴</text>`;
+  [0, Math.round(mx / 2), Math.round(mx)].forEach(t => {
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${Y(t).toFixed(1)}" y2="${Y(t).toFixed(1)}" stroke="var(--border)"/>`
+      + `<text x="${PL - 6}" y="${(Y(t) + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--text-3)">${nf(t)}</text>`; });
+  g += `<polyline points="${rows.map((x, i) => `${X(i).toFixed(1)},${Y(x.a).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-dasharray="4 3"/>`
+    + `<polyline points="${rows.map((x, i) => `${X(i).toFixed(1)},${Y(x.p).toFixed(1)}`).join(' ')}"`
+    + ` fill="none" stroke="var(--brand)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  rows.forEach((x, i) => {
+    if (x.r % 4 === 0) g += `<text x="${X(i).toFixed(1)}" y="${H - 15}" text-anchor="middle" font-size="9.5"`
+      + ` font-family="var(--mono)" fill="var(--text-3)">D${x.r > 0 ? '+' : ''}${x.r}</text>`;
+    g += `<rect x="${(X(i) - iw / 2).toFixed(1)}" y="${PT}" width="${iw.toFixed(1)}" height="${H - PT - PB}"`
+      + ` fill="transparent"><title>D${x.r > 0 ? '+' : ''}${x.r} ${iso(x.d)}\n예측 ${nf(x.p)}건`
+      + `\n${M.festival.anchorName} 실적 ${nf(x.a)}건</title></rect>`;
+    if (x.r === fest.rel) g += `<circle cx="${X(i).toFixed(1)}" cy="${Y(x.p).toFixed(1)}" r="4"`
+      + ` fill="var(--brand)" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+  return g + `<line x1="${PL}" x2="${W - PR}" y1="${H - PB}" y2="${H - PB}" stroke="var(--border-2)"/></svg>`;
+}
+
+/* ── 렌더 ──────────────────────────────────────────────────────── */
+function render(){
+  const key = $('pd').value;
+  if (!key) return;
+  const d = parse(key), r = predict(d);
+  const inFest = !!r.fest;
+  const F = M.festival, bk = F.booking, ops = M.ops;
+
+  const decomp = r.parts.map(p =>
+    `<tr${p.off ? ' class="off"' : ''}><td>${esc(p.k)}<span class="why">${esc(p.why)}</span></td>`
+    + `<td class="op">${p.op}</td><td>${esc(p.v)}</td></tr>`).join('')
+    + `<tr class="res"><td>예측</td><td class="op">=</td><td>${nf(r.pred)} 건</td></tr>`;
+
+  const staff = Math.ceil(r.pred / ops.handlePerPersonDay);
+
+  let festBlock = '';
+  if (inFest){
+    const a = F.actual[String(r.fest.rel)];
+    const types = M.mix.festivalTypes.slice(0, 10).map(t => {
+      const nm = M.mix.normalTypes.find(x => x.k === t.k);
+      return `<tr><td>${esc(t.k)}</td><td class="n">${t.share}%</td>
+        <td class="n">${nm ? nm.share + '%' : '<span class="tag">명절 전용</span>'}</td>
+        <td class="n" style="color:var(--brand);font-weight:600">${nf(Math.round(r.pred * t.share / 100))}</td></tr>`;
+    }).join('');
+    const depts = M.mix.festivalDepts.slice(0, 6).map(x =>
+      `<tr><td>${esc(x.k)}</td><td class="n">${x.share}%</td>
+       <td class="n" style="font-weight:600">${nf(Math.round(r.pred * x.share / 100))}</td></tr>`).join('');
+
+    festBlock = `
+    <section class="card">
+      <div class="card-hd"><h3>${esc(F.anchorName)} 실적 기반 투영</h3><span class="sp"></span>
+        <span class="sub">${esc(fdate(r))}</span></div>
+      <div class="card-bd"><p class="lede">${r.fest.f.name === F.anchorName
+          ? `${esc(r.fest.f.dday.slice(0, 4))}년 ${esc(F.anchorName)}은 ${esc(F.anchorDate.slice(0, 4))}년 ${esc(F.anchorName)} 실적을 그대로 프로파일로 씁니다.`
+          : `${esc(r.fest.f.name)}은(는) ${esc(F.anchorName)}과 같은 명절이라 평시 모델 대신 <b>${esc(F.anchorName)} 상대일 프로파일</b>을 씁니다.`}
+        ${esc(F.anchorName)} 당일(${esc(F.anchorDate)}) 기준 D${r.fest.rel > 0 ? '+' : ''}${r.fest.rel} 의 실적
+        <b>${nf(a.n)}건</b>에서 뽑은 명절 배수를 이 날짜에 투영했습니다.</p>
+      <div class="fc-wrap">
+        <div class="plot">
+          <div class="legend"><span><i class="a"></i>${esc(F.anchorName)} 실적</span>
+            <span><i class="b"></i>${esc(r.fest.f.name)} 예측</span></div>
+          ${festivalChart(r.fest)}
+          <p class="meth">D0 = 명절 당일 · ${esc(F.anchorName)} ${esc(F.anchorDate)} → ${esc(r.fest.f.name)} ${esc(r.fest.f.dday)}</p>
+        </div>
+        <div class="basis"><h4>선행지표</h4><table>
+          <tr><td>${esc(F.anchorName)} 예매기</td><td>${nf(bk.anchor.n)}건 · ${bk.anchor.lift}배</td></tr>
+          <tr><td>설 예매기 <span class="tag">관측됨</span></td><td>${nf(bk.target.n)}건 · ${bk.target.lift}배</td></tr>
+          <tr class="eq"><td>수요 증감률</td><td>× ${bk.growth}</td></tr></table>
+          <p>${r.note === 'booking'
+            ? `설 승차권 예매는 연휴 약 1개월 전이라 ${esc(bk.target.window[0])} ~ ${esc(bk.target.window[1])} 실적이 데이터 안에 있습니다. 이 비율을 명절 배수에 곱했습니다.`
+            : `${esc(r.fest.f.name)} 예매기는 데이터 범위 밖이라 증감 보정 없이 ${esc(F.anchorName)} 프로파일만 적용했습니다. 그만큼 근거가 약합니다.`}</p>
+        </div>
+      </div>
+      <div class="card-bd" style="padding-top:0"><div class="flag"><span class="dot" aria-hidden="true"></span>
+        <span><b>${esc(F.anchorName)} 기간 기한초과율 ${ops.festivalOverdue}% — 평시는 ${ops.normalOverdue}%였습니다.</b>
+        미완료율도 ${ops.festivalOpen}%로 평시 ${ops.normalOpen}%를 웃돌았습니다.
+        이 날짜 예측치 기준 <b>${staff}명</b>이 필요합니다 (1인 ${ops.handlePerPersonDay}건/일).</span></div></div>
+      <div class="fc-wrap">
+        <div class="tscroll"><table class="daily" style="min-width:400px"><thead><tr>
+          <th>민원유형</th><th style="text-align:right">명절 비중</th>
+          <th style="text-align:right">평시 비중</th><th style="text-align:right">예상 건수</th>
+        </tr></thead><tbody>${types}</tbody></table></div>
+        <div class="tscroll"><table class="daily" style="min-width:230px"><thead><tr>
+          <th>처리부서</th><th style="text-align:right">비중</th><th style="text-align:right">예상 건수</th>
+        </tr></thead><tbody>${depts}</tbody></table></div>
+      </div>
+    </section>`;
+  }
+
+  $('out').innerHTML = `
+    <section class="card">
+      <div class="card-hd"><h3>예측 결과</h3><span class="sp"></span>
+        <span class="kind kind-${r.kindCls}">${esc(r.kind)}</span></div>
+      <div class="card-bd"><div class="hero">
+        <div>
+          <div class="big-k">${esc(fdate(r))} 예상 접수</div>
+          <div class="big">${nf(r.pred)}</div>
+          <div class="big-s">구간 ${nf(r.lo)}–${nf(r.hi)} · 평시 기준선의 <b>${r.ratio.toFixed(2)}배</b></div>
+        </div>
+        <div class="side figs">
+          <div class="fig"><div class="k">필요 인력</div><div class="v" style="font-size:22px">${staff}명</div>
+            <div class="s">1인 ${ops.handlePerPersonDay}건/일 가정</div></div>
+          <div class="fig"><div class="k">±구간</div><div class="v" style="font-size:22px">±${Math.round(M.band * 100)}%</div>
+            <div class="s">평시 재현오차 ${M.validation.normalMape}% 포함</div></div>
+          <div class="fig"><div class="k">평시 기준선</div><div class="v" style="font-size:22px">${r.base.toFixed(0)}</div>
+            <div class="s">건/일 · 추세 외삽</div></div>
+        </div>
+      </div></div>
+      <div class="fc-wrap">
+        <div class="basis"><h4>계산 분해</h4><table class="decomp">${decomp}</table></div>
+        <div class="plot mini"><h3>선택일 전후 2주</h3>${miniChart(d)}
+          <p class="meth">짙은 막대가 선택일. 중간 농도는 명절 영향권.</p></div>
+      </div>
+    </section>
+    ${festBlock}
+    <section class="card">
+      <div class="card-hd"><h3>모델과 한계</h3></div>
+      <div class="card-bd"><div class="figs" style="margin-bottom:18px">
+        <div class="fig"><div class="k">학습 구간</div><div class="v" style="font-size:19px">${esc(M.source.from)}</div>
+          <div class="s">~ ${esc(M.source.to)} · ${nf(M.source.rows)}건</div></div>
+        <div class="fig"><div class="k">평시 관측</div><div class="v" style="font-size:19px">${nf(M.source.normalDays)}일</div>
+          <div class="s">명절·공휴일 영향권 제외</div></div>
+        <div class="fig"><div class="k">평시 재현오차</div><div class="v" style="font-size:19px">${M.validation.normalMape}%</div>
+          <div class="s">최악 ${esc(M.validation.worstDate)} ${M.validation.worstErrPct}%</div></div>
+        <div class="fig"><div class="k">명절 관측</div><div class="v attn" style="font-size:19px">1회</div>
+          <div class="s">${esc(M.festival.anchorName)}뿐 — 단일 표본</div></div>
+      </div>
+      <ul class="notes">${M.caveats.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      <p class="meth">${esc(M.method)}</p>
+      <p class="hint">예측은 <b>마스킹을 통과한 파일</b>만 입력으로 받습니다(잔존 검사 ${M.privacy.auditResiduals}건).
+        쓰는 컬럼은 ${M.privacy.columnsUsed.map(esc).join(' · ')} 이고
+        <b>제목·질문·답변 본문은 마스킹된 상태로도 읽지 않습니다.</b>
+        산출 ${esc(M.generatedAt)} · tools/forecast.py</p></div>
+    </section>`;
+}
+function fdate(r){
+  const d = parse($('pd').value);
+  return `${$('pd').value} (${DW[wd(d)]})`;
+}
+
+/* ── 부트 ──────────────────────────────────────────────────────── */
+(async function boot(){
+  M = await loadJSON('data/model.json');
+  if (!M){
+    $('src').innerHTML = '<span class="lbl">모델</span>불러오지 못했습니다';
+    $('out').innerHTML = `<section class="card"><div class="card-bd">
+      <p class="empty-note" style="padding:28px 0">예측 모델이 없습니다.
+      <code>python3 tools/forecast.py -i data/masked_seasonal.csv -o data/model.json</code> 을 실행해 생성해 주세요.</p>
+      </div></section>`;
+    return;
+  }
+  M.holidays.forEach(h => { HOL[h.date] = h.name; });
+  FESTS = M.festivals;
+  buildCatchup();
+
+  D_MIN = iso(addDays(parse(M.source.to), 1));
+  const pd = $('pd');
+  pd.min = D_MIN; pd.max = D_MAX;
+  $('range-hint').textContent = `선택 가능 ${D_MIN} ~ ${D_MAX}`;
+  $('src').innerHTML = `<span class="lbl">학습 데이터</span><b>${nf(M.source.rows)}</b>건<br>${esc(M.source.from)}<br>~ ${esc(M.source.to)}`;
+  $('lede').innerHTML = `데이터가 들어온 마지막 날(<b>${esc(M.source.to)}</b>) 이후 날짜를 고르면
+    그날의 <b>요일·시기·공휴일</b>을 반영해 접수량을 예측합니다.
+    설·추석처럼 명절 구간에 드는 날짜는 평시 모델 대신
+    같은 명절인 <b>${esc(M.festival.anchorName)}의 실적</b>을 기준으로 투영합니다.`;
+
+  const picks = [];
+  FESTS.forEach(f => picks.push([f.name + ' 당일', f.dday]));
+  picks.push(['설 연휴 전날', '2027-02-05'], ['삼일절', '2027-03-01'],
+             ['삼일절 다음날', '2027-03-02'], ['평범한 화요일', '2027-04-13']);
+  $('jump').innerHTML = picks.filter(([, v]) => v >= D_MIN && v <= D_MAX)
+    .map(([k, v]) => `<button class="btn btn-sm" data-d="${v}">${esc(k)}</button>`).join('');
+  $('jump').addEventListener('click', e => {
+    const b = e.target.closest('button[data-d]');
+    if (b){ $('pd').value = b.dataset.d; render(); }
+  });
+
+  pd.value = FESTS[0] ? FESTS[0].dday : D_MIN;
+  pd.onchange = render;
+  render();
+})();
+</script>
+
+</body>
+</html>
