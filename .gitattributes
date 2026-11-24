@@ -1,2 +1,4 @@
 # Windows 배치 파일은 체크아웃할 때 CRLF 로 — 저장소에는 LF 로 둔다
 *.bat text eol=crlf
+
+*.csv text eol=lf

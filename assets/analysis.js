@@ -405,23 +405,24 @@ function renderActions(A){
     $('an-acts-sub').textContent = '';
     return;
   }
-  /* 표로 7건을 늘어놓으면 어느 것이 급한지 눈에 들어오지 않는다.
-     카드로 끊고 우선순위를 색과 칩으로 먼저 보이게 한다. */
-  $('an-acts').innerHTML = `<div class="pcards">${A.map((a, i) => {
-    const [pl, pc] = PRI[a.p];
-    return `<article class="pcard ${pc}">
-      <div class="ph"><span class="pchip">${pl}</span><b>${a.tag}</b>
-        <span class="sp"></span>
-        <button type="button" class="ago" data-go="${a.go}" aria-label="${a.tag} 근거 섹션으로">근거 ↓</button></div>
-      <div class="pnum">${a.num}</div>
-      <p class="pact">${a.head}</p>
-      <div class="pmeta"><span class="who">${a.who}</span><span class="when">${a.when}</span></div>
-      <button type="button" class="is" aria-expanded="false" aria-controls="an-pd-${i}">자세히</button>
-      <div class="pd" id="an-pd-${i}" hidden>
-        <p>${a.find}</p><p><b>조치</b> ${a.act}</p><p><b>확인 지표</b> ${a.kpi}</p></div>
-    </article>`;
-  }).join('')}</div>`;
-  $('an-acts-sub').textContent = `${A.length}건 · 우선순위 순`;
+  $('an-acts').innerHTML = `<div class="tscroll"><table class="plan">
+    <thead><tr><th scope="col">우선</th><th scope="col">이슈</th><th scope="col">근거</th><th scope="col">조치</th>
+      <th scope="col">담당</th><th scope="col">시점</th><th scope="col"><span class="sr">근거 섹션</span></th></tr></thead>
+    <tbody>${A.map((a, i) => {
+      const [pl, pc] = PRI[a.p];
+      return `<tr class="pl">
+        <td class="pr ${pc}"><i></i>${pl}</td>
+        <td><button type="button" class="is" aria-expanded="false" aria-controls="an-pd-${i}">${a.tag}</button></td>
+        <td class="num">${a.num}</td>
+        <td class="ac">${a.head}</td>
+        <td class="mt">${a.who}</td>
+        <td class="mt">${a.when}</td>
+        <td class="gt"><button type="button" class="ago" data-go="${a.go}" aria-label="${a.tag} 근거 섹션으로">근거 ↓</button></td>
+      </tr>
+      <tr class="pd" id="an-pd-${i}" hidden><td></td><td colspan="6">
+        <p>${a.find}</p><p><b>조치</b> ${a.act}</p><p><b>확인 지표</b> ${a.kpi}</p></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  $('an-acts-sub').textContent = `${A.length}건 · 우선순위 순 · 이슈를 누르면 자세히`;
 }
 
 /* ── 부서 × 주 ──────────────────────────────────────────────────── */

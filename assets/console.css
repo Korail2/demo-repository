@@ -545,47 +545,6 @@ table.plan{width:100%;min-width:900px;border-collapse:collapse;font-size:12.5px}
 .sumbar .brief li{color:var(--text-2)}
 .sumbar .brief li::marker{color:var(--warn-line)}
 
-/* ── 대응 방안 카드 ─────────────────────────────────────────────── */
-.pcards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;padding:14px 16px;
-  align-items:start}   /* 한 장을 펼쳐도 같은 줄의 나머지가 늘어나지 않게 */
-@media (max-width:1380px){.pcards{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media (max-width:1040px){.pcards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:680px){.pcards{grid-template-columns:1fr}}
-.pcard{display:flex;flex-direction:column;gap:7px;min-width:0;
-  background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--border-2);
-  border-radius:9px;padding:13px 15px 12px}
-.pcard.crit{border-top-color:var(--crit)}
-.pcard.warn{border-top-color:var(--warn)}
-.pcard .ph{display:flex;align-items:center;gap:7px}
-.pcard .ph .sp{flex:1;min-width:0}
-.pcard .ph>b{font-size:13.5px;font-weight:700;color:var(--text);white-space:nowrap}
-.pchip{flex:none;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;
-  background:var(--surface-3);color:var(--text-3)}
-.pcard.crit .pchip{background:var(--crit-bg);color:var(--crit)}
-.pcard.warn .pchip{background:var(--warn-bg);color:var(--warn)}
-.pcard .pnum{font-family:var(--mono);font-size:11.5px;color:var(--text-3);
-  display:flex;align-items:center;flex-wrap:wrap;gap:3px}
-.pcard .pnum b{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-.02em}
-.pcard.crit .pnum b{color:var(--crit)}
-.pcard.warn .pnum b{color:var(--warn)}
-.pcard .pnum s{text-decoration:none;color:var(--text-3)}
-.pcard .pact{margin:0;font-size:12.5px;line-height:1.5;color:var(--text)}
-.pcard .pact::before{content:"→ ";color:var(--text-3)}
-.pcard .pmeta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--text-2)}
-.pcard .pmeta .when{color:var(--text-3)}
-.pcard button.is{align-self:flex-start;background:none;border:0;padding:2px 0;
-  font:inherit;font-size:11px;color:var(--text-3);cursor:pointer}
-.pcard button.is::after{content:" ▸"}
-.pcard button.is[aria-expanded=true]::after{content:" ▾"}
-.pcard button.is:hover{color:var(--brand)}
-.pcard .pd{border-top:1px solid var(--border);padding-top:9px;font-size:11.5px;line-height:1.6;color:var(--text-2)}
-.pcard .pd p{margin:0 0 5px}
-.pcard .pd b{color:var(--text)}
-.pcard.open{box-shadow:var(--shadow-lg)}
-.pcard .ago{background:none;border:0;padding:0;font:inherit;font-size:10.5px;
-  color:var(--text-3);cursor:pointer;white-space:nowrap}
-.pcard .ago:hover{color:var(--brand);text-decoration:underline}
-
 /* 유형 지도 — 칸마다 종 수가 크게 달라 짧은 칸이 억지로 늘어나며 빈 공간이
    생겼다. 1px 간격으로 구분선을 그리던 방식을 칸별 테두리로 바꾸고
    늘이지 않는다. */
