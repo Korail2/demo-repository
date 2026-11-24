@@ -4,18 +4,25 @@
 서버 없이 GitHub Pages 로 배포된다.
 
 ```
-index.html              조회·다운로드 페이지   (빌드 산출물 — 직접 고치지 말 것)
+index.html              조회·다운로드(#search) + 민원 분석(#analysis)  (빌드 산출물 — 직접 고치지 말 것)
 forecast.html           민원 예측 페이지       (빌드 산출물 — 직접 고치지 말 것)
+analysis.html           index.html#analysis 로 넘기는 안내 페이지
+run_console.bat         Windows 에서 로컬 서버를 띄우고 분석 화면을 연다
 src/
-  console.html          조회 페이지 소스 (아티팩트용 조각)
+  console.html          조회·분석 페이지 소스 (아티팩트용 조각) — 서버 모드 + 조건 추천 + 분석 보기
   forecast.html         예측 페이지 소스 (아티팩트용 조각)
+  analysis.html         안내 페이지 소스
 assets/
   console.css           두 페이지 공유 스타일
-  common.js             두 페이지 공유 유틸 (CSV 파서, 저장, 이력, 상태 판정)
+  common.js             공유 유틸 (CSV 파서, 저장, 이력, 상태 판정)
+  analysis.js           민원 분석 보기 — 조회 보기가 받은 DATA 를 넘겨받아 그린다
+  suggest.js            급증 구간 탐지·조건 추천 (조회·분석 페이지 공유)
 data/
   masked_seasonal.csv   마스킹 완료 데이터 — 이 폴더에는 audit 0건인 파일만 둔다
+  masked_seasonal.js    위 CSV 의 file:// 용 사본 (embed_data.py 산출물)
   model.json            예측 모델 파라미터 (기준선·요일·시기·공휴일 계수 + 명절 프로파일)
 tools/
+  embed_data.py         data/ CSV·JSON → file:// 용 .js 사본 (잔존검사 통과분만)
   pii_mask.py           마스킹 엔진 + 테이블 파이프라인 (표준 라이브러리만)
   make_seasonal.py      계절성 더미데이터 생성기
   forecast.py           추석 → 설 예측 모듈
@@ -29,10 +36,22 @@ tools/
 |---|---|---|
 | `index.html` | 기간·유형별 조회, 조회분만 CSV 다운로드, 상세 열람 | `data/masked_seasonal.csv` (6.5MB) |
 | `forecast.html` | 날짜를 고르면 요일·시기·공휴일을 분해해 예측. 명절이면 추석 실적으로 투영 | `data/model.json` (8KB) |
+| `index.html#analysis` | 급증 구간 탐지·비교, 유형 시기 집중도, 부서×주 부하, 경로 변화, 제목 키워드 | 조회 보기와 같은 `DATA` (CSV 를 다시 받지 않는다) |
 
 예측 페이지는 원본 CSV를 받지 않는다. **모델 파라미터만 받아 브라우저에서 계산**하므로
 6.5MB 대신 8KB로 열리고, 미리 계산해 둔 날짜가 아니어도 사용자가 고른 어떤 날짜든 예측한다.
 두 페이지는 `assets/` 를 공유해 중복이 없다.
+
+분석 보기는 조회 보기·예측 페이지에 있는 것을 반복하지 않는다. 건수·처리상태·시간대·유형 상위는
+조회 페이지에, 앞으로의 접수량·명절 투영·재현오차는 예측 페이지에 있다. 분석 페이지가 보는 것은
+**언제 몰렸나**(급증 구간, `suggest.js` 와 같은 중앙값×1.3 기준), **무엇이 몰렸나**(유형별 시기 집중도),
+**누가 받았나**(부서×주 기한초과율), **어디로 들어왔나**(급증 구간의 경로 변화), **무슨 말이 늘었나**(제목 키워드)다.
+본문은 제목만 읽고, 5건 미만 집계 칸은 `<5` 로 가린다.
+
+맨 위 **대응 방안** 조치 계획표는 이 분석 결과에서 규칙으로 만든다(`assets/analysis.js` buildActions).
+부하 쏠림 → 한시 증원, 급증기 기한초과 → 별도 처리 기한, 시기 집중 유형 → 사전 공지, 시기 전용 유형 → 명절 체크리스트,
+상시 반복 제목 → 개선 과제, 새 키워드 → 원인 확인, 채널 쏠림 → 채널별 안내. 한 줄에 우선 · 이슈 · 근거 수치 · 조치 · 담당 · 시점을 적고,
+이슈를 누르면 발견 내용과 확인 지표가 펼쳐진다. 근거 섹션으로 내려가는 버튼도 단다. 필요 인력은 예측 모델과 같은 1인 18건/일 가정이다.
 
 ### 예측 모델
 
@@ -65,7 +84,12 @@ tools/
 ```bash
 python3 tools/build.py src/console.html  index.html
 python3 tools/build.py src/forecast.html forecast.html
+python3 tools/build.py src/analysis.html analysis.html
 ```
+
+`src/console.html` 이 유일한 원본이다. 예전 배포본 `index.html` 에만 있던 조건 추천과
+`src/` 에만 있던 서버 모드를 이 파일 하나로 합쳤다. 서버 모드에서는 원본 행이 브라우저로 오지 않으므로
+조건 추천 바를 숨기고, 분석 보기는 `/api/analytics` 가 붙기 전까지 안내만 보여준다.
 
 `src/` 조각에는 `<!doctype>` 와 `<head>` 가 없다. claude.ai 아티팩트는 발행 시
 플랫폼이 그 부분을 붙여주지만 GitHub Pages 에는 아무것도 붙지 않기 때문에
@@ -120,6 +144,9 @@ python3 tools/pii_mask.py audit data/masked_seasonal.csv
 
 # 4) 예측 모델 추정 (입력이 마스킹을 통과하지 않으면 거부된다)
 python3 tools/forecast.py -i data/masked_seasonal.csv -o data/model.json
+
+# 5) 더블클릭으로 열 수 있게 사본 생성 (잔존검사를 다시 돌린다)
+python3 tools/embed_data.py
 ```
 
 `--id-mode fixed`, `--date-mode format` 으로 마스킹하면 **이 화면이 성립하지 않는다.**
@@ -130,13 +157,24 @@ python3 tools/forecast.py -i data/masked_seasonal.csv -o data/model.json
 
 ## 로컬 실행
 
-`fetch()` 로 `data/` 를 읽으므로 `file://` 로 직접 열면 동작하지 않는다.
-간단한 서버를 띄운다.
+**`index.html` 을 더블클릭해서 바로 열어도 된다.** `file://` 에서는 브라우저가 `fetch()` 를 막기 때문에,
+그때만 `data/masked_seasonal.js` · `data/model.js` 를 `<script>` 로 읽는다(`assets/common.js` loadCSV/loadJSON).
+이 두 파일은 CSV·JSON 을 감싼 사본이고, 서버에서는 내려받지 않는다.
+
+`data/` 의 CSV 나 `model.json` 을 바꿨다면 사본도 다시 만든다. CSV 는 잔존검사 0건이 아니면 감싸지 않는다.
+
+```bash
+python3 tools/embed_data.py
+```
+
+서버로 띄워도 된다.
 
 ```bash
 python3 -m http.server 8000
 # http://localhost:8000
 ```
+
+Windows 에서는 `run_console.bat` 을 더블클릭하면 서버를 띄우고 분석 화면(`index.html#analysis`)을 연다.
 
 ---
 

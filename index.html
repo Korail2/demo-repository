@@ -29,7 +29,8 @@ img{max-width:100%}
   </div>
   <nav class="snav">
     <span class="grp">업무</span>
-    <a href="index.html" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="index.html#search" id="nav-search" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="index.html#analysis" id="nav-analysis"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 13.5V8M6.5 13.5V3M10.5 13.5V6.5M14 13.5H1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>민원 분석</a>
     <a href="forecast.html"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5l3.5-4 2.8 2.4L14 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 4.5H14v3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>민원 예측</a>
   </nav>
   <div class="side-foot" id="src"><span class="lbl">데이터</span>불러오는 중…</div>
@@ -38,16 +39,16 @@ img{max-width:100%}
 <main class="main">
   <header class="phead">
     <div>
-      <h2>조회·다운로드</h2>
-      <p>마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.</p>
+      <h2 id="ph-t">조회·다운로드</h2>
+      <p id="ph-d">마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.</p>
     </div>
     <div class="phead-act" id="phead-act"></div>
   </header>
-  <div class="content">
+  <div class="content" id="view-search">
 <section class="card">
     <div class="card-hd"><h3>조회 조건</h3></div>
     <div class="card-bd">
-    <div class="sgbar">
+    <div class="sgbar" id="sgbar">
       <label for="sg-goal">조건 추천</label>
       <input type="text" id="sg-goal" autocomplete="off"
              placeholder="무엇을 쓰려는지 한 줄로 — 예: 추석 기간 민원 급증 원인 보고서">
@@ -130,6 +131,110 @@ img{max-width:100%}
     접수번호는 <code>surrogate</code>, 날짜는 <code>hour</code> 모드로 처리해 행 식별과 시간축을 남겼습니다 — 두 값을 형식 문자열로 완전히 치환하면 이 화면의 기간 조회도 시간대별 집계도 성립하지 않습니다.
   </p></div></section>
   </div>
+  <div class="content" id="view-analysis" hidden>
+
+  <section class="card">
+    <div class="card-hd"><h3>분석 기간</h3><span class="sp"></span><span class="sub" id="an-rng-hint"></span></div>
+    <div class="card-bd">
+      <div class="pick">
+        <div class="f"><label for="an-d1">등록일</label>
+          <div class="in"><input type="date" id="an-d1"><span class="tilde">—</span><input type="date" id="an-d2"></div></div>
+        <div class="f"><label>바로가기</label><div class="an-chips" id="an-quick" role="group" aria-label="기간 바로가기"></div></div>
+        <span class="sp"></span>
+        <button class="btn btn-go" id="an-btn-go">분석</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><h3>이 기간 한눈에</h3></div>
+    <div class="card-bd"><ul class="brief" id="an-brief"><li>계산 중…</li></ul></div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><h3>대응 방안</h3><span class="sp"></span><span class="sub" id="an-acts-sub"></span></div>
+    <div id="an-acts"></div>
+    <div class="card-bd" style="padding-top:10px">
+      <p class="hint" style="margin:0">아래 분석에서 규칙으로 만든 제안입니다. 숫자는 위에서 고른 기간 기준이고, 기간을 바꾸면 다시 계산됩니다.
+        필요 인력은 예측 모델과 같은 <b>1인 18건/일</b> 가정입니다. 담당과 시점은 출발점이니 조직 사정에 맞게 고쳐 쓰세요.</p>
+    </div>
+  </section>
+
+  <div class="an2">
+    <section class="card" id="an-sec-trend">
+      <div class="card-hd"><h3>일별 접수와 급증 구간</h3><span class="sp"></span>
+        <span class="sub" id="an-trend-sub"></span></div>
+      <div class="card-bd trend">
+        <div class="legend">
+          <span><i class="c" style="background:var(--warn-bg);border-color:var(--warn-line)"></i>급증 구간 (2일 이상 연속)</span>
+          <span><i class="a"></i>일별 중앙값</span>
+          <span><i style="border-top:2px dashed var(--crit)"></i>급증 기준 (중앙값 × 1.3)</span>
+        </div>
+        <div id="an-trend"></div>
+        <p class="meth">막대를 누르면 오른쪽에 그날의 구성이 나옵니다. 급증 기준은 조회 화면의 조건 추천과 같습니다(assets/suggest.js).</p>
+      </div>
+    </section>
+    <section class="card dayp">
+      <div class="card-hd"><h3>날짜 상세</h3><span class="sp"></span>
+        <input type="date" id="an-dsel" aria-label="상세를 볼 날짜" style="width:auto;min-width:0;padding:3px 7px"></div>
+      <div class="card-bd" id="an-day"></div>
+    </section>
+  </div>
+
+  <section class="card" id="an-sec-runs">
+    <div class="card-hd"><h3>급증 구간 비교</h3><span class="sp"></span>
+      <span class="sub">구간마다 평소보다 비중이 2배 넘게 커진 유형</span></div>
+    <div class="tscroll"><table class="daily" style="min-width:760px">
+      <thead><tr><th>구간</th><th style="text-align:right">일수</th><th style="text-align:right">접수</th>
+        <th style="text-align:right">기간 비중</th><th style="text-align:right">일평균 / 중앙값</th>
+        <th style="text-align:right">기한초과율</th><th>평소보다 늘어난 유형</th></tr></thead>
+      <tbody id="an-runs"></tbody></table></div>
+  </section>
+
+  <section class="card" id="an-sec-quad">
+    <div class="card-hd"><h3>유형 지도 · 건수 × 시기 집중도</h3><span class="sp"></span>
+      <span class="sub" id="an-quad-sub"></span></div>
+    <div class="card-bd">
+      <div class="quad" id="an-quad"></div>
+      <p class="hint" id="an-quad-hint"></p>
+    </div>
+  </section>
+
+  <section class="card" id="an-sec-heat">
+    <div class="card-hd"><h3>부서 부하 · 주별 접수와 기한초과율</h3><span class="sp"></span>
+      <span class="sub">칸 색 = 접수량 · 칸 숫자 = 기한초과율</span></div>
+    <div class="card-bd">
+      <div class="tscroll"><table class="heat" id="an-heat"></table></div>
+      <div class="scale"><span>접수량</span><span class="sw" id="an-sw"></span><span>적음 → 많음</span>
+        <span>· 주황 주차 = 급증 구간 포함 · 5건 미만 칸은 &lt;5</span></div>
+    </div>
+  </section>
+
+  <div class="an2 even">
+    <section class="card" id="an-sec-chs">
+      <div class="card-hd"><h3>유입경로 · 평소와 급증 구간</h3></div>
+      <div class="tscroll"><table class="daily" style="min-width:420px">
+        <thead><tr><th>경로</th><th style="text-align:right">평소</th><th style="text-align:right">급증 구간</th>
+          <th>차이</th></tr></thead>
+        <tbody id="an-chs"></tbody></table></div>
+    </section>
+    <section class="card" id="an-sec-kw">
+      <div class="card-hd"><h3>제목 키워드</h3><span class="sp"></span><span class="sub">마스킹 토큰·불용어 제외</span></div>
+      <div class="card-bd">
+        <div class="kwcols">
+          <div><h4>많이 나온 말</h4><div class="rank" id="an-kw-top"></div></div>
+          <div><h4 id="an-kw-rise-h">최근 4주에 늘어난 말</h4><div id="an-kw-rise"></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card"><div class="card-bd"><p class="hint" style="margin:0">
+    이 화면은 마스킹을 통과한 <code>data/masked_seasonal.csv</code>의 <b>집계만</b> 보여줍니다. 본문 중에서는 <b>제목만</b> 읽고 질문·답변은 읽지 않으며, 제목의 <span class="tok">&lt;이름_1&gt;</span> 같은 토큰은 키워드에서 뺍니다.
+    한 칸의 건수가 5건 미만이면 숫자 대신 <code>&lt;5</code>로 표시합니다 — 작은 칸은 마스킹을 해도 특정 건을 가리키는 단서가 될 수 있습니다.
+    운영계에서는 이 화면의 조회도 접속기록(제8조) 대상입니다.
+  </p></div></section>
+  </div>
 </main>
 </div>
 
@@ -137,10 +242,38 @@ img{max-width:100%}
 
 <script src="assets/common.js"></script>
 <script src="assets/suggest.js"></script>
+<script src="assets/analysis.js"></script>
 <script>
 'use strict';
 const DL_SYNC_LIMIT = 3000;
 let DATA = [], view = [], page = 1, sortKey = "등록일", sortDir = -1;
+
+/* ---------- 데이터 출처 ----------
+   정적 모드  CSV 를 통째로 받아 브라우저가 거른다 (GitHub Pages 데모)
+   서버 모드  /api 로 질의한다. 한 페이지씩만 내려오고 집계도 서버가 한다.
+   부트에서 /api/health 응답 여부로 가른다. 화면 코드는 둘을 구분하지 않는다. */
+let SERVER = false, TOTAL = 0, SUM = null, DATA_RANGE = null;
+
+function qs(c, extra){
+  const p = new URLSearchParams();
+  if (c.d1) p.set('from', c.d1);
+  if (c.d2) p.set('to', c.d2);
+  if (c.type) p.set('type', c.type);
+  if (c.ch) p.set('ch', c.ch);
+  if (c.dept) p.set('dept', c.dept);
+  if (c.stat) p.set('stat', c.stat);
+  if (c.kw) p.set('q', c.kw);
+  for (const k in (extra || {})) p.set(k, extra[k]);
+  return p.toString();
+}
+async function fetchPage(){
+  const c = conds(), size = +$('pgsize').value;
+  const [a, b] = await Promise.all([
+    fetch('/api/complaints?' + qs(c, { page, size, sort: sortKey, dir: sortDir < 0 ? 'desc' : 'asc' })).then(r => r.json()),
+    fetch('/api/summary?' + qs(c)).then(r => r.json())
+  ]);
+  view = a.rows || []; TOTAL = a.total || 0; SUM = b;
+}
 
 /* ---------- 필터 ---------- */
 function conds(){
@@ -160,7 +293,14 @@ function applyFilter(){
     if (kw && !(r['제목'] + r['질문'] + r['답변']).toLowerCase().includes(kw)) return false;
     return true;
   });
-  sortView(); page = 1;
+  sortView(); page = 1; TOTAL = view.length; SUM = null;
+}
+
+/* 조회 → 렌더를 한 묶음으로. 서버 모드에서만 비동기다. */
+async function refresh(resetPage){
+  if (resetPage !== false) page = 1;
+  if (SERVER) await fetchPage(); else applyFilter();
+  render();
 }
 function sortView(){
   view.sort((a, b) => { const x = a[sortKey] || '', y = b[sortKey] || '';
@@ -178,17 +318,18 @@ function condText(){
 
 /* ---------- 렌더 ---------- */
 function render(){
-  $('total').textContent = nf(view.length);
+  $('total').textContent = nf(TOTAL);
   renderFigs(); renderRows(); renderPager(); syncArrows();
-  $('btn-dl').textContent = view.length ? `${nf(view.length)}건 CSV 생성` : 'CSV 생성';
-  $('btn-dl').disabled = !view.length;
+  $('btn-dl').textContent = TOTAL ? `${nf(TOTAL)}건 CSV 생성` : 'CSV 생성';
+  $('btn-dl').disabled = !TOTAL;
 }
 function renderFigs(){
-  const n = view.length;
-  const done = view.filter(r => status(r)[1] === 'done').length;
-  const over = view.filter(r => status(r)[1] === 'over').length;
-  const open = view.filter(r => status(r)[1] === 'open').length;
-  const days = new Set(view.map(r => day(r['등록일']))).size;
+  // 서버 모드에서는 한 페이지만 들고 있으므로 집계를 직접 셀 수 없다. 서버 값을 쓴다.
+  const n = SUM ? SUM.total : view.length;
+  const done = SUM ? SUM.done : view.filter(r => status(r)[1] === 'done').length;
+  const over = SUM ? SUM.over : view.filter(r => status(r)[1] === 'over').length;
+  const open = SUM ? SUM.open : view.filter(r => status(r)[1] === 'open').length;
+  const days = SUM ? SUM.days : new Set(view.map(r => day(r['등록일']))).size;
   $('figs').innerHTML = [
     ['조회 건수', nf(n), days ? `${nf(days)}일간` : '—', ''],
     ['완료', nf(done), n ? (done / n * 100).toFixed(1) + '%' : '—', ''],
@@ -198,8 +339,9 @@ function renderFigs(){
   ].map(([k, v, s, cls]) =>
     `<div class="fig"><div class="k">${k}</div><div class="v ${cls}">${v}</div><div class="s">${s}</div></div>`).join('');
 
-  const H = new Array(24).fill(0);
-  view.forEach(r => { const h = parseInt((r['등록일'] || '').slice(11, 13), 10); if (h >= 0 && h < 24) H[h]++; });
+  let H = new Array(24).fill(0);
+  if (SUM) H = SUM.hours.slice();
+  else view.forEach(r => { const h = parseInt((r['등록일'] || '').slice(11, 13), 10); if (h >= 0 && h < 24) H[h]++; });
   // 우측 요약 컬럼(약 300px)에 들어가므로 viewBox 를 실제 렌더 폭에 가깝게 잡는다.
   // 680 짜리를 300px 로 줄여 그리면 글자가 절반 크기로 뭉개진다.
   const mx = Math.max(1, ...H), W = 340, Hh = 152, PL = 34, PR = 6, PT = 18, PB = 20;
@@ -222,8 +364,13 @@ function renderFigs(){
     + ` font-size="9.5" font-weight="700" font-family="var(--mono)" fill="var(--brand)">${nf(mx)}</text>`;
   $('ch-hour').innerHTML = s + '</svg>';
 
-  const cnt = {}; view.forEach(r => cnt[r['민원유형']] = (cnt[r['민원유형']] || 0) + 1);
-  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 8), tm = top.length ? top[0][1] : 1;
+  let top;
+  if (SUM) top = SUM.topTypes.map(t => [t.k, t.n]);
+  else {
+    const cnt = {}; view.forEach(r => cnt[r['민원유형']] = (cnt[r['민원유형']] || 0) + 1);
+    top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }
+  const tm = top.length ? top[0][1] : 1;
   $('ch-type').innerHTML = top.length ? top.map(([k, v]) =>
     `<div class="rk"><span class="nm" title="${esc(k)}">${esc(k)}</span>`
     + `<span class="tr"><i style="width:${(v / tm * 100).toFixed(1)}%"></i></span>`
@@ -231,7 +378,10 @@ function renderFigs(){
     : '<p style="color:var(--text-3);font-size:12px;margin:0">표시할 데이터가 없습니다.</p>';
 }
 function renderRows(){
-  const size = +$('pgsize').value, start = (page - 1) * size, slice = view.slice(start, start + size);
+  // 서버 모드의 view 는 이미 현재 페이지다. start 를 0 으로 둬 data-i 가 양쪽에서 view 의 인덱스가 된다.
+  const size = +$('pgsize').value;
+  const start = SERVER ? 0 : (page - 1) * size;
+  const slice = SERVER ? view : view.slice(start, start + size);
   if (!slice.length){
     $('rows').innerHTML = `<tr><td colspan="8"><div class="none"><b>조회 결과가 없습니다</b>조회 조건을 넓혀 다시 시도해 주세요.</div></td></tr>`;
     return;
@@ -248,7 +398,7 @@ function renderRows(){
   }).join('');
 }
 function renderPager(){
-  const size = +$('pgsize').value, last = Math.max(1, Math.ceil(view.length / size));
+  const size = +$('pgsize').value, last = Math.max(1, Math.ceil(TOTAL / size));
   if (page > last) page = last;
   const nums = [1];
   for (let p = page - 2; p <= page + 2; p++) if (p > 1 && p < last) nums.push(p);
@@ -316,7 +466,46 @@ function dlPanel(csv, name, n, how){
   };
   logHist(n, how);
 }
+/* 서버 모드 — 반출은 서버가 만든다. 브라우저는 조건만 보낸다.
+   한도 이하면 그 자리에서 CSV 가 오고, 넘으면 202 + job 이 온다. */
+async function doDownloadServer(){
+  const n = TOTAL; if (!n) return;
+  const c = conds();
+  const body = JSON.stringify({ from:c.d1, to:c.d2, type:c.type, dept:c.dept, q:c.kw });
+  const res = await fetch('/api/exports', {
+    method:'POST', headers:{ 'Content-Type':'application/json' }, body });
+
+  if (res.status === 200){
+    dlPanel(await res.text(), fileName(n), n, '서버 즉시 생성');
+    return;
+  }
+  if (res.status !== 202){ alert('반출 요청이 거부되었습니다.'); return; }
+
+  const job = await res.json();
+  $('dl-zone').innerHTML = `<div class="dlbox">
+    <div class="h"><span class="fn">반출 작업 생성됨</span>
+      <span class="mt">${nf(job.rowCount)}건 · 즉시 생성 상한 초과</span></div>
+    <div class="bar-prog"><i id="pg" style="width:12%"></i></div>
+    <pre id="pg-msg">서버에서 파일을 만들고 있습니다. 완료되면 만료 시간이 있는 링크가 발급됩니다.</pre></div>`;
+
+  for (let i = 0; i < 60; i++){
+    await new Promise(r => setTimeout(r, 700));
+    const s = await fetch('/api/exports/' + job.jobId).then(r => r.json());
+    const bar = $('pg'); if (bar) bar.style.width = Math.min(90, 12 + i * 14) + '%';
+    if (s.status === 'failed'){ $('pg-msg').textContent = '생성 실패: ' + (s.error || ''); return; }
+    if (s.status === 'done'){
+      if (bar) bar.style.width = '100%';
+      const csv = await fetch(s.url).then(r => r.text());
+      dlPanel(csv, fileName(s.rowCount), s.rowCount,
+              '서버 비동기 생성 · 링크 만료 ' + (s.expiresAt || '').slice(11, 16));
+      return;
+    }
+  }
+  $('pg-msg').textContent = '시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.';
+}
+
 function doDownload(){
+  if (SERVER) return doDownloadServer();
   const n = view.length; if (!n) return;
   const name = fileName(n), rows = view.slice();
   if (n > DL_SYNC_LIMIT){
@@ -344,14 +533,22 @@ function renderHist(){
 }
 
 /* ---------- 조건 UI ---------- */
-function fillSelects(){
-  const put = (id, key) => {
-    const vals = [...new Set(DATA.map(r => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+function fillSelects(facets){
+  const opts = (id, vals) =>
     $(id).insertAdjacentHTML('beforeend', vals.map(v => `<option>${esc(v)}</option>`).join(''));
-  };
+  if (facets){
+    // 서버 모드 — 선택지를 DB 에서 받는다. 화면이 값 목록을 하드코딩하지 않는다.
+    opts('f-type', facets.types.map(t => t.k));
+    opts('f-dept', facets.depts.map(t => t.k));
+    opts('f-ch', (facets.channels || []).map(t => t.k));
+    return;
+  }
+  const put = (id, key) =>
+    opts(id, [...new Set(DATA.map(r => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko')));
   put('f-type', '민원유형'); put('f-ch', '유입경로'); put('f-dept', '처리부서');
 }
 function bounds(){
+  if (DATA_RANGE) return [DATA_RANGE.from, DATA_RANGE.to];
   const ds = DATA.map(r => day(r['등록일'])).filter(Boolean).sort();
   return [ds[0], ds[ds.length - 1]];
 }
@@ -369,9 +566,11 @@ function setPreset(days){
 }
 
 /* ---------- 조건 추천 ---------- */
-/* 추천은 조건만 만든다. 데이터를 거르는 것은 기존 applyFilter 그대로다 —
-   추천을 거쳐도 조회 경로가 달라지지 않아야 결과를 믿을 수 있다. */
-function runSuggest(){
+/* 추천은 조건만 만든다. 데이터를 거르는 것은 기존 조회 경로(refresh) 그대로다 —
+   추천을 거쳐도 조회 경로가 달라지지 않아야 결과를 믿을 수 있다.
+   브라우저에 올라온 행으로 계산하므로 정적 모드에서만 쓴다. 서버 모드에서는
+   /api/suggest-query 가 같은 모양으로 돌려주도록 맞춰 두었다. */
+async function runSuggest(){
   const box = $('sg-msg');
   let r;
   try {
@@ -387,39 +586,62 @@ function runSuggest(){
   $('f-kw').value = r.q || '';
   document.querySelectorAll('.quick button').forEach(c => c.setAttribute('aria-pressed', 'false'));
 
-  applyFilter(); render(); $('dl-zone').innerHTML = '';
+  await refresh(); $('dl-zone').innerHTML = '';
 
   const notes = r.notes.map(n => `<span class="nt">· ${esc(n)}</span>`).join('');
   box.hidden = false;
-  box.innerHTML = `<b>${esc(condText())}</b> &rarr; <b>${nf(view.length)}건</b>`
+  box.innerHTML = `<b>${esc(condText())}</b> &rarr; <b>${nf(TOTAL)}건</b>`
                 + (r.reason ? ` · ${esc(r.reason)}` : '') + notes;
 }
 $('sg-go').onclick = runSuggest;
 $('sg-goal').addEventListener('keydown', e => { if (e.key === 'Enter') runSuggest(); });
 
+/* ---------- 보기 전환 — #search / #analysis ----------
+   한 페이지 안의 두 보기다. 데이터는 한 번만 받아 둘이 같이 쓴다. */
+const VIEWS = {
+  search:   { t:'조회·다운로드', d:'마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.' },
+  analysis: { t:'민원 분석', d:'민원이 언제 몰리고, 무엇이 몰리고, 누가 그 부하를 받는지 봅니다. 건수·처리상태·시간대는 조회·다운로드에, 앞으로의 접수량은 민원 예측에 있습니다.' }
+};
+function showView(){
+  const v = location.hash === '#analysis' ? 'analysis' : 'search';
+  $('view-search').hidden = v !== 'search';
+  $('view-analysis').hidden = v !== 'analysis';
+  ['search', 'analysis'].forEach(k => {
+    if (k === v) $('nav-' + k).setAttribute('aria-current', 'page');
+    else $('nav-' + k).removeAttribute('aria-current');
+  });
+  $('ph-t').textContent = VIEWS[v].t; $('ph-d').textContent = VIEWS[v].d;
+  document.title = VIEWS[v].t === '조회·다운로드' ? '민원 조회 콘솔' : '민원 분석 — 민원 조회 콘솔';
+}
+window.addEventListener('hashchange', () => { showView(); window.scrollTo(0, 0); });
+showView();
+
 /* ---------- 이벤트 ---------- */
-$('btn-search').onclick = () => { applyFilter(); render(); $('dl-zone').innerHTML = ''; };
+$('btn-search').onclick = () => { refresh(); $('dl-zone').innerHTML = ''; };
 $('btn-reset').onclick = () => {
   ['f-type','f-ch','f-dept','f-stat'].forEach(i => $(i).value = '');
-  $('f-kw').value = ''; setPreset(0); applyFilter(); render(); $('dl-zone').innerHTML = '';
+  $('f-kw').value = ''; setPreset(0); refresh(); $('dl-zone').innerHTML = '';
   $('sg-goal').value = ''; $('sg-msg').hidden = true;
 };
 $('btn-dl').onclick = doDownload;
-$('pgsize').onchange = () => { page = 1; renderRows(); renderPager(); };
+$('pgsize').onchange = () => { refresh(); };
 $('btn-clearhist').onclick = () => { try { localStorage.removeItem(HK); } catch (e) {} renderHist(); };
 $('d1').onchange = $('d2').onchange = () => {
   document.querySelectorAll('.quick button').forEach(c => c.setAttribute('aria-pressed', 'false'));
 };
 document.querySelectorAll('.quick button').forEach(c =>
-  c.onclick = () => { setPreset(+c.dataset.days); applyFilter(); render(); });
+  c.onclick = () => { setPreset(+c.dataset.days); refresh(); });
 document.querySelectorAll('th.so').forEach(th => th.onclick = () => {
   const k = th.dataset.sort;
   if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = -1; }
-  sortView(); page = 1; render();
+  if (SERVER) { refresh(); } else { sortView(); page = 1; render(); }
 });
 $('pager').addEventListener('click', e => {
   const b = e.target.closest('button[data-p]');
-  if (b && !b.disabled){ page = +b.dataset.p; renderRows(); renderPager(); }
+  if (b && !b.disabled){
+    page = +b.dataset.p;
+    if (SERVER) refresh(false); else { renderRows(); renderPager(); }
+  }
 });
 $('rows').addEventListener('click', e => {
   const tr = e.target.closest('tr[data-i]'); if (tr) openDrawer(+tr.dataset.i);
@@ -433,14 +655,33 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
 
 /* ---------- 부트 ---------- */
 (async function boot(){
-  DATA = await loadCSV('data/masked_seasonal.csv') || [];
-  if (DATA.length){
-    const r = `${day(DATA[0]['등록일'])} — ${day(DATA[DATA.length - 1]['등록일'])}`;
-    $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
+  // 서버가 붙어 있으면 서버 모드. 없으면 CSV 를 받아 브라우저가 거르는 정적 모드.
+  let health = null;
+  try {
+    const r = await fetch('/api/health', { cache:'no-store' });
+    if (r.ok) health = await r.json();
+  } catch (e) {}
+
+  if (health){
+    SERVER = true;
+    const fc = await fetch('/api/facets').then(r => r.json());
+    fillSelects(fc);
+    $('src').innerHTML = `<span class="lbl">서버 · ${esc(health.dbUser)}</span>`
+      + `<b>${nf(health.rows)}</b>행<br>${esc(fc.range.from)}<br>~ ${esc(fc.range.to)}`
+      + `<br><span class="lbl" style="margin-top:4px">규칙 ${esc(health.maskVersion)}</span>`;
+    DATA_RANGE = fc.range;
+    $('sgbar').hidden = true;          // 추천은 브라우저에 올라온 행으로 계산한다
   } else {
-    $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
+    DATA = await loadCSV('data/masked_seasonal.csv') || [];
+    if (DATA.length){
+      $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
+    } else {
+      $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
+    }
+    fillSelects();
   }
-  fillSelects(); setPreset(0); renderHist(); applyFilter(); render();
+  setPreset(0); renderHist(); await refresh();
+  Analysis.init(SERVER ? [] : DATA);   // 같은 DATA 를 넘긴다 — CSV 를 다시 받지 않는다
 })();
 </script>
 

@@ -99,12 +99,30 @@ function stamp(iso){
        + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/* 데이터 로드 — 두 페이지가 같은 경로를 본다 */
+/* 데이터 로드 — 모든 페이지가 같은 경로를 본다
+   서버·GitHub Pages 에서는 fetch() 로 읽는다. index.html 을 더블클릭해 file:// 로 열면
+   브라우저가 fetch() 를 막으므로, 그때만 tools/embed_data.py 가 만든 같은 이름의 .js 를
+   <script> 로 불러온다. 서버에서는 .js 를 받지 않아 6.5MB 를 두 번 내려받지 않는다. */
+function loadEmbedded(path){
+  window.__EMBED = window.__EMBED || {};
+  if (path in window.__EMBED) return Promise.resolve(window.__EMBED[path]);
+  return new Promise(res => {
+    const s = document.createElement('script');
+    s.src = path.replace(/\.(csv|json)$/, '.js'); s.charset = 'utf-8';
+    s.onload = () => res(window.__EMBED[path] ?? null);
+    s.onerror = () => res(null);
+    document.head.appendChild(s);
+  });
+}
+async function readText(path){
+  try { const r = await fetch(path); if (r.ok) return await r.text(); } catch (e) {}
+  return loadEmbedded(path);
+}
 async function loadCSV(path){
-  try { const r = await fetch(path); if (r.ok) return parseCSV(await r.text()); } catch (e) {}
-  return null;
+  const t = await readText(path);
+  return t == null ? null : parseCSV(t);
 }
 async function loadJSON(path){
-  try { const r = await fetch(path); if (r.ok) return await r.json(); } catch (e) {}
-  return null;
+  const t = await readText(path);
+  try { return t == null ? null : JSON.parse(t); } catch (e) { return null; }
 }

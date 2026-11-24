@@ -13,7 +13,8 @@
   </div>
   <nav class="snav">
     <span class="grp">업무</span>
-    <a href="index.html" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="index.html#search" id="nav-search" aria-current="page"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 6h13M6 6v7.5" stroke="currentColor" stroke-width="1.3"/></svg>조회·다운로드</a>
+    <a href="index.html#analysis" id="nav-analysis"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 13.5V8M6.5 13.5V3M10.5 13.5V6.5M14 13.5H1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>민원 분석</a>
     <a href="forecast.html"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 12.5l3.5-4 2.8 2.4L14 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.5 4.5H14v3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>민원 예측</a>
   </nav>
   <div class="side-foot" id="src"><span class="lbl">데이터</span>불러오는 중…</div>
@@ -22,15 +23,22 @@
 <main class="main">
   <header class="phead">
     <div>
-      <h2>조회·다운로드</h2>
-      <p>마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.</p>
+      <h2 id="ph-t">조회·다운로드</h2>
+      <p id="ph-d">마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.</p>
     </div>
     <div class="phead-act" id="phead-act"></div>
   </header>
-  <div class="content">
+  <div class="content" id="view-search">
 <section class="card">
     <div class="card-hd"><h3>조회 조건</h3></div>
     <div class="card-bd">
+    <div class="sgbar" id="sgbar">
+      <label for="sg-goal">조건 추천</label>
+      <input type="text" id="sg-goal" autocomplete="off"
+             placeholder="무엇을 쓰려는지 한 줄로 — 예: 추석 기간 민원 급증 원인 보고서">
+      <button class="btn" id="sg-go">조건 채우기</button>
+    </div>
+    <div class="sgmsg" id="sg-msg" aria-live="polite" hidden></div>
     <div class="tools">
       <div class="f wide"><label for="d1">등록일</label>
         <div class="in"><input type="date" id="d1"><span class="tilde">—</span><input type="date" id="d2"></div></div>
@@ -107,12 +115,118 @@
     접수번호는 <code>surrogate</code>, 날짜는 <code>hour</code> 모드로 처리해 행 식별과 시간축을 남겼습니다 — 두 값을 형식 문자열로 완전히 치환하면 이 화면의 기간 조회도 시간대별 집계도 성립하지 않습니다.
   </p></div></section>
   </div>
+  <div class="content" id="view-analysis" hidden>
+
+  <section class="card">
+    <div class="card-hd"><h3>분석 기간</h3><span class="sp"></span><span class="sub" id="an-rng-hint"></span></div>
+    <div class="card-bd">
+      <div class="pick">
+        <div class="f"><label for="an-d1">등록일</label>
+          <div class="in"><input type="date" id="an-d1"><span class="tilde">—</span><input type="date" id="an-d2"></div></div>
+        <div class="f"><label>바로가기</label><div class="an-chips" id="an-quick" role="group" aria-label="기간 바로가기"></div></div>
+        <span class="sp"></span>
+        <button class="btn btn-go" id="an-btn-go">분석</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><h3>이 기간 한눈에</h3></div>
+    <div class="card-bd"><ul class="brief" id="an-brief"><li>계산 중…</li></ul></div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><h3>대응 방안</h3><span class="sp"></span><span class="sub" id="an-acts-sub"></span></div>
+    <div id="an-acts"></div>
+    <div class="card-bd" style="padding-top:10px">
+      <p class="hint" style="margin:0">아래 분석에서 규칙으로 만든 제안입니다. 숫자는 위에서 고른 기간 기준이고, 기간을 바꾸면 다시 계산됩니다.
+        필요 인력은 예측 모델과 같은 <b>1인 18건/일</b> 가정입니다. 담당과 시점은 출발점이니 조직 사정에 맞게 고쳐 쓰세요.</p>
+    </div>
+  </section>
+
+  <div class="an2">
+    <section class="card" id="an-sec-trend">
+      <div class="card-hd"><h3>일별 접수와 급증 구간</h3><span class="sp"></span>
+        <span class="sub" id="an-trend-sub"></span></div>
+      <div class="card-bd trend">
+        <div class="legend">
+          <span><i class="c" style="background:var(--warn-bg);border-color:var(--warn-line)"></i>급증 구간 (2일 이상 연속)</span>
+          <span><i class="a"></i>일별 중앙값</span>
+          <span><i style="border-top:2px dashed var(--crit)"></i>급증 기준 (중앙값 × 1.3)</span>
+        </div>
+        <div id="an-trend"></div>
+        <p class="meth">막대를 누르면 오른쪽에 그날의 구성이 나옵니다. 급증 기준은 조회 화면의 조건 추천과 같습니다(assets/suggest.js).</p>
+      </div>
+    </section>
+    <section class="card dayp">
+      <div class="card-hd"><h3>날짜 상세</h3><span class="sp"></span>
+        <input type="date" id="an-dsel" aria-label="상세를 볼 날짜" style="width:auto;min-width:0;padding:3px 7px"></div>
+      <div class="card-bd" id="an-day"></div>
+    </section>
+  </div>
+
+  <section class="card" id="an-sec-runs">
+    <div class="card-hd"><h3>급증 구간 비교</h3><span class="sp"></span>
+      <span class="sub">구간마다 평소보다 비중이 2배 넘게 커진 유형</span></div>
+    <div class="tscroll"><table class="daily" style="min-width:760px">
+      <thead><tr><th>구간</th><th style="text-align:right">일수</th><th style="text-align:right">접수</th>
+        <th style="text-align:right">기간 비중</th><th style="text-align:right">일평균 / 중앙값</th>
+        <th style="text-align:right">기한초과율</th><th>평소보다 늘어난 유형</th></tr></thead>
+      <tbody id="an-runs"></tbody></table></div>
+  </section>
+
+  <section class="card" id="an-sec-quad">
+    <div class="card-hd"><h3>유형 지도 · 건수 × 시기 집중도</h3><span class="sp"></span>
+      <span class="sub" id="an-quad-sub"></span></div>
+    <div class="card-bd">
+      <div class="quad" id="an-quad"></div>
+      <p class="hint" id="an-quad-hint"></p>
+    </div>
+  </section>
+
+  <section class="card" id="an-sec-heat">
+    <div class="card-hd"><h3>부서 부하 · 주별 접수와 기한초과율</h3><span class="sp"></span>
+      <span class="sub">칸 색 = 접수량 · 칸 숫자 = 기한초과율</span></div>
+    <div class="card-bd">
+      <div class="tscroll"><table class="heat" id="an-heat"></table></div>
+      <div class="scale"><span>접수량</span><span class="sw" id="an-sw"></span><span>적음 → 많음</span>
+        <span>· 주황 주차 = 급증 구간 포함 · 5건 미만 칸은 &lt;5</span></div>
+    </div>
+  </section>
+
+  <div class="an2 even">
+    <section class="card" id="an-sec-chs">
+      <div class="card-hd"><h3>유입경로 · 평소와 급증 구간</h3></div>
+      <div class="tscroll"><table class="daily" style="min-width:420px">
+        <thead><tr><th>경로</th><th style="text-align:right">평소</th><th style="text-align:right">급증 구간</th>
+          <th>차이</th></tr></thead>
+        <tbody id="an-chs"></tbody></table></div>
+    </section>
+    <section class="card" id="an-sec-kw">
+      <div class="card-hd"><h3>제목 키워드</h3><span class="sp"></span><span class="sub">마스킹 토큰·불용어 제외</span></div>
+      <div class="card-bd">
+        <div class="kwcols">
+          <div><h4>많이 나온 말</h4><div class="rank" id="an-kw-top"></div></div>
+          <div><h4 id="an-kw-rise-h">최근 4주에 늘어난 말</h4><div id="an-kw-rise"></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card"><div class="card-bd"><p class="hint" style="margin:0">
+    이 화면은 마스킹을 통과한 <code>data/masked_seasonal.csv</code>의 <b>집계만</b> 보여줍니다. 본문 중에서는 <b>제목만</b> 읽고 질문·답변은 읽지 않으며, 제목의 <span class="tok">&lt;이름_1&gt;</span> 같은 토큰은 키워드에서 뺍니다.
+    한 칸의 건수가 5건 미만이면 숫자 대신 <code>&lt;5</code>로 표시합니다 — 작은 칸은 마스킹을 해도 특정 건을 가리키는 단서가 될 수 있습니다.
+    운영계에서는 이 화면의 조회도 접속기록(제8조) 대상입니다.
+  </p></div></section>
+  </div>
 </main>
 </div>
 
 <div id="dw-host"></div>
 
 <script src="assets/common.js"></script>
+<script src="assets/suggest.js"></script>
+<script src="assets/analysis.js"></script>
 <script>
 'use strict';
 const DL_SYNC_LIMIT = 3000;
@@ -435,11 +549,63 @@ function setPreset(days){
     c.setAttribute('aria-pressed', String(+c.dataset.days === days)));
 }
 
+/* ---------- 조건 추천 ---------- */
+/* 추천은 조건만 만든다. 데이터를 거르는 것은 기존 조회 경로(refresh) 그대로다 —
+   추천을 거쳐도 조회 경로가 달라지지 않아야 결과를 믿을 수 있다.
+   브라우저에 올라온 행으로 계산하므로 정적 모드에서만 쓴다. 서버 모드에서는
+   /api/suggest-query 가 같은 모양으로 돌려주도록 맞춰 두었다. */
+async function runSuggest(){
+  const box = $('sg-msg');
+  let r;
+  try {
+    r = sgSuggest($('sg-goal').value, DATA);
+  } catch (e){
+    box.hidden = false;
+    box.innerHTML = `<span class="er">${esc(e.message)}</span>`;
+    return;
+  }
+  $('d1').value = r.from; $('d2').value = r.to;
+  $('f-type').value = r.type || ''; $('f-dept').value = r.dept || '';
+  $('f-ch').value = r.ch || ''; $('f-stat').value = r.stat || '';
+  $('f-kw').value = r.q || '';
+  document.querySelectorAll('.quick button').forEach(c => c.setAttribute('aria-pressed', 'false'));
+
+  await refresh(); $('dl-zone').innerHTML = '';
+
+  const notes = r.notes.map(n => `<span class="nt">· ${esc(n)}</span>`).join('');
+  box.hidden = false;
+  box.innerHTML = `<b>${esc(condText())}</b> &rarr; <b>${nf(TOTAL)}건</b>`
+                + (r.reason ? ` · ${esc(r.reason)}` : '') + notes;
+}
+$('sg-go').onclick = runSuggest;
+$('sg-goal').addEventListener('keydown', e => { if (e.key === 'Enter') runSuggest(); });
+
+/* ---------- 보기 전환 — #search / #analysis ----------
+   한 페이지 안의 두 보기다. 데이터는 한 번만 받아 둘이 같이 쓴다. */
+const VIEWS = {
+  search:   { t:'조회·다운로드', d:'마스킹을 통과한 민원 데이터를 기간·유형별로 조회하고, 조회된 범위만 CSV로 내려받습니다.' },
+  analysis: { t:'민원 분석', d:'민원이 언제 몰리고, 무엇이 몰리고, 누가 그 부하를 받는지 봅니다. 건수·처리상태·시간대는 조회·다운로드에, 앞으로의 접수량은 민원 예측에 있습니다.' }
+};
+function showView(){
+  const v = location.hash === '#analysis' ? 'analysis' : 'search';
+  $('view-search').hidden = v !== 'search';
+  $('view-analysis').hidden = v !== 'analysis';
+  ['search', 'analysis'].forEach(k => {
+    if (k === v) $('nav-' + k).setAttribute('aria-current', 'page');
+    else $('nav-' + k).removeAttribute('aria-current');
+  });
+  $('ph-t').textContent = VIEWS[v].t; $('ph-d').textContent = VIEWS[v].d;
+  document.title = VIEWS[v].t === '조회·다운로드' ? '민원 조회 콘솔' : '민원 분석 — 민원 조회 콘솔';
+}
+window.addEventListener('hashchange', () => { showView(); window.scrollTo(0, 0); });
+showView();
+
 /* ---------- 이벤트 ---------- */
 $('btn-search').onclick = () => { refresh(); $('dl-zone').innerHTML = ''; };
 $('btn-reset').onclick = () => {
   ['f-type','f-ch','f-dept','f-stat'].forEach(i => $(i).value = '');
   $('f-kw').value = ''; setPreset(0); refresh(); $('dl-zone').innerHTML = '';
+  $('sg-goal').value = ''; $('sg-msg').hidden = true;
 };
 $('btn-dl').onclick = doDownload;
 $('pgsize').onchange = () => { refresh(); };
@@ -488,6 +654,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
       + `<b>${nf(health.rows)}</b>행<br>${esc(fc.range.from)}<br>~ ${esc(fc.range.to)}`
       + `<br><span class="lbl" style="margin-top:4px">규칙 ${esc(health.maskVersion)}</span>`;
     DATA_RANGE = fc.range;
+    $('sgbar').hidden = true;          // 추천은 브라우저에 올라온 행으로 계산한다
   } else {
     DATA = await loadCSV('data/masked_seasonal.csv') || [];
     if (DATA.length){
@@ -498,5 +665,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
     fillSelects();
   }
   setPreset(0); renderHist(); await refresh();
+  Analysis.init(SERVER ? [] : DATA);   // 같은 DATA 를 넘긴다 — CSV 를 다시 받지 않는다
 })();
 </script>

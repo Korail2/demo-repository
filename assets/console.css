@@ -391,3 +391,99 @@ td.nw{white-space:nowrap}
 .sgmsg b{color:var(--text);font-weight:600}
 .sgmsg .nt{display:block;color:var(--text-3)}
 .sgmsg .er{color:var(--crit)}
+
+/* ── 분석 보기 (index.html#analysis) ───────────────────────────────
+   assets/analysis.js 가 그린다. 조회 보기와 같은 DATA 를 쓴다. */
+
+.brief{margin:0;padding:0 0 0 18px;display:grid;gap:4px;font-size:12.5px;color:var(--text-2);line-height:1.8}
+.brief b{color:var(--text);font-weight:600}
+.brief .hot{color:var(--crit);font-weight:700}
+.an2{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+.an2.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1140px){.an2,.an2.even{grid-template-columns:1fr}}
+.pick>.f:first-child{flex:1 1 300px}
+.pick .in input[type=date]{min-width:0;flex:1 1 0}
+#trend{overflow-x:auto}
+.trend svg{display:block;width:100%;min-width:640px;height:auto}
+.trend .hit{cursor:pointer}
+.dayp .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.dayp .bign{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em}
+.dayp .lx{font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600}
+.dayp .lx.calm{color:var(--text-3)}
+.lift{font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:999px;white-space:nowrap}
+.lift.up{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit-line)}
+.lift.eq{background:var(--surface-3);color:var(--text-3);border:1px solid var(--border)}
+.quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+@media (max-width:760px){.quad{grid-template-columns:1fr}}
+.q{background:var(--surface);padding:12px 14px;min-width:0}
+.q h4{font-size:12px;font-weight:700;margin:0}
+.q .act{font-size:11px;color:var(--text-3);margin:2px 0 10px}
+.q.hot h4{color:var(--warn)}
+.q .row{display:grid;grid-template-columns:86px minmax(0,1fr) 44px 40px;gap:8px;align-items:center;font-size:12px;padding:3px 0}
+.q .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q .row .tr{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.q .row .tr i{display:block;height:100%;border-radius:3px;background:var(--brand)}
+.q.hot .row .tr i{background:var(--warn)}
+.q .row .c{font-family:var(--mono);text-align:right;font-size:11px;color:var(--text-2)}
+.q .empty{font-size:11.5px;color:var(--text-3)}
+table.heat{border-collapse:separate;border-spacing:2px;min-width:640px;width:100%;font-size:11px}
+.heat th{font-weight:500;color:var(--text-3);font-family:var(--mono);font-size:10px;padding:2px 0 4px;white-space:nowrap}
+.heat th.run{color:var(--warn);font-weight:700}
+.heat th.dn{font-family:var(--ui);font-size:12px;color:var(--text);text-align:left;padding-right:8px;font-weight:500}
+.heat td{height:30px;text-align:center;border-radius:3px;font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.heat td.tot{background:none;text-align:right;color:var(--text-2);padding-left:8px;white-space:nowrap}
+.heat td.tot b{color:var(--crit)}
+.scale{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text-3);margin-top:10px}
+.scale span.sw{display:inline-flex;gap:2px}
+.scale span.sw i{width:20px;height:10px;display:block}
+.dbar{display:inline-block;height:6px;border-radius:3px;vertical-align:middle}
+.kwcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+@media (max-width:760px){.kwcols{grid-template-columns:1fr}}
+.kwcols h4{font-size:10.5px;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin:0 0 10px}
+.rise{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 10px;border-radius:var(--r-sm);
+  background:var(--surface-2);border:1px solid var(--border);font-size:12px;margin-bottom:5px}
+.rise .g{font-family:var(--mono);font-weight:700;color:var(--crit);white-space:nowrap}
+.rise .g.new{color:var(--warn)}
+.rise .s{font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.an-chips{display:flex;gap:2px;flex-wrap:wrap}
+.an-chips button{background:none;border:1px solid transparent;padding:4px 11px;border-radius:999px;cursor:pointer;
+  font-size:12px;color:var(--text-2)}
+.an-chips button:hover{background:var(--surface-3);color:var(--text)}
+.an-chips button[aria-pressed=true]{background:var(--brand-50);border-color:var(--brand-line);color:var(--brand);font-weight:600}
+
+/* 대응 방안 — 조치 계획표 */
+table.plan{width:100%;min-width:900px;border-collapse:collapse;font-size:12.5px}
+.plan th{font-size:10.5px;font-weight:600;color:var(--text-3);text-align:left;padding:8px 12px;
+  border-bottom:1px solid var(--border-2);background:var(--surface-2);white-space:nowrap}
+.plan td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.plan tr.pl:hover td,.plan tr.open td{background:var(--surface-2)}
+.plan .pr{font-size:11px;font-weight:700;white-space:nowrap}
+.plan .pr i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.plan .pr.crit{color:var(--crit)} .plan .pr.crit i{background:var(--crit)}
+.plan .pr.warn{color:var(--warn)} .plan .pr.warn i{background:var(--warn)}
+.plan .pr.plain{color:var(--text-3)} .plan .pr.plain i{background:var(--border-2)}
+.plan button.is{background:none;border:0;padding:4px 0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;white-space:nowrap}
+.plan button.is::after{content:' ▸';font-size:9px;color:var(--text-3)}
+.plan button.is[aria-expanded=true]::after{content:' ▾'}
+.plan button.is:hover{color:var(--brand)}
+.plan .num{font-family:var(--mono);white-space:nowrap;color:var(--text-2)}
+.plan .num b{font-size:14px;color:var(--text);font-weight:600}
+.plan .num s{text-decoration:none;color:var(--text-3)}
+.plan .ac{color:var(--text)}
+.plan .ac b{font-weight:700}
+.plan .mt{color:var(--text-2);font-size:11.5px;white-space:nowrap}
+.plan .gt{text-align:right}
+.plan .ago{background:none;border:0;padding:4px 0;font:inherit;font-size:11px;color:var(--brand);cursor:pointer;white-space:nowrap}
+.plan .ago:hover{text-decoration:underline}
+.plan tr.pd td{background:var(--surface-2);padding:2px 12px 14px;border-bottom:1px solid var(--border)}
+.plan tr.pd p{margin:6px 0 0;font-size:12px;line-height:1.7;color:var(--text-2);white-space:normal;max-width:900px}
+.plan tr.pd b{color:var(--text)}
+.spark{position:relative;display:inline-block;width:64px;height:6px;margin-left:8px;vertical-align:middle;
+  background:var(--surface-3);border-radius:3px;overflow:hidden}
+.spark i,.spark u{position:absolute;left:0;top:0;bottom:0;border-radius:3px;text-decoration:none}
+.spark.crit i{background:var(--crit)} .spark.warn i{background:var(--warn)}
+.spark u{background:var(--text-3)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--brand-line)}100%{box-shadow:var(--shadow)}}
+.card.flash{animation:flash 1.6s ease-out}
