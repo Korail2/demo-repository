@@ -37,6 +37,63 @@ function compute(a, b){
   return { a, b, rows, runs, inRun, runRows, calmRows, days };
 }
 
+/* ── 요약 지표 ──────────────────────────────────────────────────────
+   읽는 사람이 가장 먼저 봐야 할 다섯 가지를 위에 올린다.
+   값 하나만 두면 좋은지 나쁜지 알 수 없으므로 평시(급증 구간을 뺀 날)
+   대비 차이를 함께 적는다. 평시가 비교 기준이고, 색은 그 차이가
+   나쁜 쪽일 때만 쓴다. */
+function doneRate(rows){
+  return rows.length ? rows.filter(r => r['완료일']).length / rows.length : 0;
+}
+function avgDays(rows){
+  let s = 0, n = 0;
+  for (const r of rows){
+    if (!r['완료일']) continue;
+    const t = (new Date(day(r['완료일']) + 'T00:00:00') - new Date(day(r['등록일']) + 'T00:00:00')) / 86400000;
+    if (t >= 0){ s += t; n++; }
+  }
+  return n ? s / n : 0;
+}
+function renderKpi(C){
+  const host = $('an-kpis');
+  if (!C.rows.length){ host.innerHTML = ''; return; }
+
+  const runDays = C.runs.reduce((s, r) => s + r.len, 0);
+  const calmDays = Math.max(1, C.days.length - runDays);
+  const perDay = C.rows.length / C.days.length;
+  const calmPerDay = C.calmRows.length / calmDays;
+
+  // 델타는 '평시 대비'다. tone 은 나쁜 쪽일 때만 붙인다.
+  const d = (v, tone) => v ? `<em class="${tone}">${v}</em>` : '';
+  const pp = x => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1) + '%p';
+  const over = overRate(C.rows), overCalm = overRate(C.calmRows);
+  const done = doneRate(C.rows), doneCalm = doneRate(C.calmRows);
+  const dur = avgDays(C.rows), durCalm = avgDays(C.calmRows);
+  const lift = calmPerDay ? perDay / calmPerDay - 1 : 0;
+
+  const cards = [
+    { k: '접수 민원', v: nf(C.rows.length) + '건', tone: '',
+      s: `평시 일 ${calmPerDay.toFixed(1)}건 · <b>일평균 ${perDay.toFixed(1)}건</b>`,
+      e: d(lift > .02 ? `(+${(lift * 100).toFixed(0)}%)` : '', 'up') },
+    { k: '완료율', v: p1(done), tone: '',
+      s: `평시 ${p1(doneCalm)}`, e: d(pp((done - doneCalm) * 100), done < doneCalm ? 'bad' : 'good') },
+    { k: '기한초과율', v: p1(over), tone: over > overCalm * 1.2 ? 'bad' : '',
+      s: `평시 ${p1(overCalm)}`, e: d(pp((over - overCalm) * 100), over > overCalm ? 'bad' : 'good') },
+    { k: '평균 처리일', v: dur.toFixed(1) + '일', tone: '',
+      s: `평시 ${durCalm.toFixed(1)}일`,
+      e: d((dur - durCalm >= 0 ? '+' : '−') + Math.abs(dur - durCalm).toFixed(1) + '일', dur > durCalm ? 'bad' : 'good') },
+  ];
+  if (C.runs.length){
+    const share = C.runRows.length / C.rows.length, dshare = runDays / C.days.length;
+    cards.push({ k: `급증 ${runDays}일 비중`, v: p1(share), tone: 'evt',
+      s: `평시 기간의 ${p1(dshare)}`,
+      e: d(`${(share / dshare).toFixed(1)}배 집중`, 'evt') });
+  }
+  host.innerHTML = cards.map(c =>
+    `<div class="kpi${c.tone ? ' ' + c.tone : ''}"><div class="k">${c.k}</div>`
+    + `<div class="v">${c.v}</div><div class="s">${c.s} ${c.e}</div></div>`).join('');
+}
+
 /* ── 한눈에 ─────────────────────────────────────────────────────── */
 function renderBrief(C, depts, rise){
   const li = [];
@@ -340,24 +397,23 @@ function renderActions(A){
     $('an-acts-sub').textContent = '';
     return;
   }
-  $('an-acts').innerHTML = `<div class="tscroll"><table class="plan">
-    <thead><tr><th scope="col">우선</th><th scope="col">이슈</th><th scope="col">근거</th><th scope="col">조치</th>
-      <th scope="col">담당</th><th scope="col">시점</th><th scope="col"><span class="sr">근거 섹션</span></th></tr></thead>
-    <tbody>${A.map((a, i) => {
-      const [pl, pc] = PRI[a.p];
-      return `<tr class="pl">
-        <td class="pr ${pc}"><i></i>${pl}</td>
-        <td><button type="button" class="is" aria-expanded="false" aria-controls="an-pd-${i}">${a.tag}</button></td>
-        <td class="num">${a.num}</td>
-        <td class="ac">${a.head}</td>
-        <td class="mt">${a.who}</td>
-        <td class="mt">${a.when}</td>
-        <td class="gt"><button type="button" class="ago" data-go="${a.go}" aria-label="${a.tag} 근거 섹션으로">근거 ↓</button></td>
-      </tr>
-      <tr class="pd" id="an-pd-${i}" hidden><td></td><td colspan="6">
-        <p>${a.find}</p><p><b>조치</b> ${a.act}</p><p><b>확인 지표</b> ${a.kpi}</p></td></tr>`;
-    }).join('')}</tbody></table></div>`;
-  $('an-acts-sub').textContent = `${A.length}건 · 우선순위 순 · 이슈를 누르면 자세히`;
+  /* 표로 7건을 늘어놓으면 어느 것이 급한지 눈에 들어오지 않는다.
+     카드로 끊고 우선순위를 색과 칩으로 먼저 보이게 한다. */
+  $('an-acts').innerHTML = `<div class="pcards">${A.map((a, i) => {
+    const [pl, pc] = PRI[a.p];
+    return `<article class="pcard ${pc}">
+      <div class="ph"><span class="pchip">${pl}</span><b>${a.tag}</b>
+        <span class="sp"></span>
+        <button type="button" class="ago" data-go="${a.go}" aria-label="${a.tag} 근거 섹션으로">근거 ↓</button></div>
+      <div class="pnum">${a.num}</div>
+      <p class="pact">${a.head}</p>
+      <div class="pmeta"><span class="who">${a.who}</span><span class="when">${a.when}</span></div>
+      <button type="button" class="is" aria-expanded="false" aria-controls="an-pd-${i}">자세히</button>
+      <div class="pd" id="an-pd-${i}" hidden>
+        <p>${a.find}</p><p><b>조치</b> ${a.act}</p><p><b>확인 지표</b> ${a.kpi}</p></div>
+    </article>`;
+  }).join('')}</div>`;
+  $('an-acts-sub').textContent = `${A.length}건 · 우선순위 순`;
 }
 
 /* ── 부서 × 주 ──────────────────────────────────────────────────── */
@@ -480,6 +536,7 @@ function render(){
   renderTrend(C); renderDay(C); renderRuns(C); renderQuad(C, M);
   const depts = renderHeat(C); renderCh(C);
   const rise = renderKw(C);
+  renderKpi(C);
   renderBrief(C, depts, rise);
   renderActions(buildActions(C, depts, rise, M));
 }
@@ -498,7 +555,8 @@ $('an-acts').addEventListener('click', e => {
     const open = x.getAttribute('aria-expanded') !== 'true';
     x.setAttribute('aria-expanded', String(open));
     $(x.getAttribute('aria-controls')).hidden = !open;
-    x.closest('tr').classList.toggle('open', open);
+    const box = x.closest('.pcard') || x.closest('tr');
+    if (box) box.classList.toggle('open', open);
     return;
   }
   const b = e.target.closest('[data-go]'); if (!b) return;
