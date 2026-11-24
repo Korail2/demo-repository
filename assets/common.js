@@ -17,6 +17,23 @@ function esc(s){
 function tokens(s){
   return esc(s).replace(/&lt;([^&]{1,18}?_\d+)&gt;/g, '<span class="tok">&lt;$1&gt;</span>');
 }
+/* 이 건에서 무엇을 몇 개 가렸는지 — 종류별로 센다.
+   <이름_1> 같은 토큰의 밑줄 앞부분이 종류다. 같은 번호는 같은 값을
+   가리키므로 중복은 하나로 센다. */
+function maskSummary(r){
+  const seen = new Map();
+  for (const col of ['제목', '질문', '답변']){
+    const t = r[col] || '';
+    const re = /<([^<>]{1,18}?)_(\d+)>/g;
+    let m;
+    while ((m = re.exec(t))){
+      const kind = m[1];
+      if (!seen.has(kind)) seen.set(kind, new Set());
+      seen.get(kind).add(m[2]);
+    }
+  }
+  return [...seen].map(([k, v]) => [k, v.size]).sort((a, b) => b[1] - a[1]);
+}
 function dowOf(iso){
   const d = new Date(iso + 'T00:00:00');
   return DW[(d.getDay() + 6) % 7];

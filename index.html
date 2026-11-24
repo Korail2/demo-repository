@@ -87,6 +87,7 @@ img{max-width:100%}
       <div class="card-hd"><h3>조회 결과</h3></div>
       <div class="resline">
         <span class="c">총 <b id="total">0</b> 건</span>
+        <span class="mlegend"><span class="tok">&lt;이름_1&gt;</span> 가린 값 · <i class="mk">가공</i> 형태만 바꾼 값</span>
         <span class="sp"></span>
         <span class="pg"><label for="pgsize">페이지당</label>
           <select id="pgsize"><option>20</option><option selected>50</option><option>100</option></select></span>
@@ -96,8 +97,8 @@ img{max-width:100%}
       <div class="tscroll">
         <table class="grid">
           <thead><tr>
-            <th class="so" data-sort="접수번호">접수번호<span class="ar" data-ar="접수번호"></span></th>
-            <th class="so" data-sort="등록일">등록일<span class="ar" data-ar="등록일"></span></th>
+            <th class="so" data-sort="접수번호">접수번호<i class="mk" title="원본 접수번호가 아닙니다. 행을 구분하기 위한 대체키로 바꿨습니다.">가공</i><span class="ar" data-ar="접수번호"></span></th>
+            <th class="so" data-sort="등록일">등록일<i class="mk" title="분·초를 잘라 시(時) 단위로 맞췄습니다. 시간대별 집계를 남기기 위한 처리입니다.">가공</i><span class="ar" data-ar="등록일"></span></th>
             <th>민원유형</th><th>유입경로</th><th>제목</th><th>처리부서</th><th>완료유형</th><th>상태</th>
           </tr></thead>
           <tbody id="rows"><tr><td colspan="8" style="padding:0">
@@ -207,7 +208,7 @@ img{max-width:100%}
 
   <section class="card" id="an-sec-heat">
     <div class="card-hd"><h3>부서 부하 · 주별 접수와 기한초과율</h3><span class="sp"></span>
-      <span class="sub">칸 색 = 접수량 · 칸 숫자 = 기한초과율</span></div>
+      <span class="sub" id="an-heat-sub">칸 색 = 접수량 · 칸 숫자 = 기한초과율</span></div>
     <div class="card-bd">
       <div class="tscroll"><table class="heat" id="an-heat"></table></div>
       <div class="scale"><span>접수량</span><span class="sw" id="an-sw"></span><span>적음 → 많음</span>
@@ -253,6 +254,23 @@ img{max-width:100%}
 const DL_SYNC_LIMIT = 3000;
 let DATA = [], view = [], page = 1, sortKey = "등록일", sortDir = -1;
 
+/* ---------- 본문은 필요할 때만 ----------
+   목록과 분석 화면은 민원 본문(질문·답변)을 쓰지 않는다. 본문이 전체
+   글자수의 57% 라서, 처음부터 다 받으면 쓰지도 않는 값이 메모리의 대부분을
+   차지한다(34,635행 기준 228MB → 14MB). 상세 패널·본문 검색·CSV 생성,
+   이 세 가지에서만 전체 파일을 받는다. */
+let FULL = null, fullPromise = null;
+function ensureFull(){
+  if (FULL) return Promise.resolve(FULL);
+  if (!fullPromise) fullPromise = loadCSV('data/masked_seasonal.csv').then(rows => {
+    FULL = new Map((rows || []).map(r => [r['접수번호'], r]));
+    return FULL;
+  });
+  return fullPromise;
+}
+/* 슬림 행에 본문을 얹어 돌려준다. 아직 안 받았으면 슬림 그대로. */
+const withBody = r => (FULL && FULL.get(r['접수번호'])) || r;
+
 /* ---------- 데이터 출처 ----------
    정적 모드  CSV 를 통째로 받아 브라우저가 거른다 (GitHub Pages 데모)
    서버 모드  /api 로 질의한다. 한 페이지씩만 내려오고 집계도 서버가 한다.
@@ -295,7 +313,11 @@ function applyFilter(){
     if (c.ch   && r['유입경로'] !== c.ch) return false;
     if (c.dept && r['처리부서'] !== c.dept) return false;
     if (c.stat && status(r)[1] !== c.stat) return false;
-    if (kw && !(r['제목'] + r['질문'] + r['답변']).toLowerCase().includes(kw)) return false;
+    if (kw){
+      const f = FULL && FULL.get(r['접수번호']);
+      const hay = f ? (f['제목'] + f['질문'] + f['답변']) : (r['제목'] || '');
+      if (!hay.toLowerCase().includes(kw)) return false;
+    }
     return true;
   });
   sortView(); page = 1; TOTAL = view.length; SUM = null;
@@ -304,6 +326,7 @@ function applyFilter(){
 /* 조회 → 렌더를 한 묶음으로. 서버 모드에서만 비동기다. */
 async function refresh(resetPage){
   if (resetPage !== false) page = 1;
+  if (!SERVER && conds().kw) await ensureFull();   // 본문 검색은 본문이 있어야 한다
   if (SERVER) await fetchPage(); else applyFilter();
   render();
 }
@@ -423,8 +446,19 @@ function syncArrows(){
 }
 
 /* ---------- 상세 ---------- */
-function openDrawer(i){
-  const r = view[i]; if (!r) return;
+/* 이 건에서 무엇을 가렸는지 한 줄로 먼저 보여준다. 본문을 읽기 전에
+   어디가 원본이 아닌지 알아야 오해가 없다. */
+function maskBadge(r){
+  const m = maskSummary(r);
+  const parts = m.map(([k, n]) => `<b>${esc(k)}</b>${n > 1 ? ' ' + n : ''}`).join(' · ');
+  return `<div class="mbadge"><span class="t">이 건에서 가린 것</span>`
+       + (parts ? `<span class="v">${parts}</span>` : `<span class="v none">없음</span>`)
+       + `<span class="x">접수번호·날짜는 전 행이 가공됨</span></div>`;
+}
+async function openDrawer(i){
+  const slim = view[i]; if (!slim) return;
+  await ensureFull();
+  const r = withBody(slim);
   const [lab, cls] = status(r);
   const kv = ['접수번호','등록일','접수일','처리기한','완료일','민원유형','유입경로','고객요구유형',
               '상위완료유형','완료유형','처리부서','처리자']
@@ -435,6 +469,7 @@ function openDrawer(i){
         <span class="st st-${cls}">${lab}</span>
         <button class="x" data-close aria-label="닫기">✕</button></div>
       <div class="dw-b">
+        ${maskBadge(r)}
         <div class="kv">${kv}</div>
         <div class="blk"><h4>제목</h4><p>${tokens(r['제목'])}</p></div>
         <div class="blk"><h4>질문</h4><p>${tokens(r['질문'])}</p></div>
@@ -509,10 +544,11 @@ async function doDownloadServer(){
   $('pg-msg').textContent = '시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.';
 }
 
-function doDownload(){
+async function doDownload(){
   if (SERVER) return doDownloadServer();
   const n = view.length; if (!n) return;
-  const name = fileName(n), rows = view.slice();
+  await ensureFull();                      // 반출본에는 본문이 들어가야 한다
+  const name = fileName(n), rows = view.map(withBody);
   if (n > DL_SYNC_LIMIT){
     $('dl-zone').innerHTML = `<div class="dlbox">
       <div class="h"><span class="fn">다운로드 요청 접수</span>
@@ -677,7 +713,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
     DATA_RANGE = fc.range;
     $('sgbar').hidden = true;          // 추천은 브라우저에 올라온 행으로 계산한다
   } else {
-    DATA = await loadCSV('data/masked_seasonal.csv') || [];
+    DATA = await loadCSV('data/slim.csv') || [];
     if (DATA.length){
       $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
     } else {

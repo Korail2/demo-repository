@@ -8,6 +8,14 @@
 'use strict';
 let DATA = [], AGG = null, SEL = null, CUR = null;
 const MIN_CELL = 5;
+/* 영업처 85%, 차량처 10%, 나머지 여섯 부서를 합쳐 5% — 실제 분포는 이렇게
+   치우쳐 있다. 그대로 두면 한 달에 몇 건 들어오는 부서가 '쏠림 1위'로
+   뽑힌다(모수 68건에서 50%는 34건일 뿐이다). 비율을 말할 수 있는
+   최소 모수를 정해 두고, 그 아래는 순위에서 뺀다. */
+const MIN_DEPT = 150;
+/* 공단은 외부기관이다. 이관 건은 사내 처리기한이 적용되지 않고
+   인력을 배정할 수도 없다. 담당 후보에서 제외한다. */
+const EXTERNAL = new Set(['공단']);
 const p1 = v => (v * 100).toFixed(1) + '%';
 const md = s => `${+s.slice(5, 7)}/${+s.slice(8, 10)}`;
 const small = n => n < MIN_CELL ? '&lt;5' : nf(n);
@@ -419,39 +427,62 @@ function renderActions(A){
 /* ── 부서 × 주 ──────────────────────────────────────────────────── */
 function monday(s){ const d = new Date(s + 'T00:00:00'); const k = (d.getDay() + 6) % 7; return addDays(s, -k); }
 function renderHeat(C){
-  const weeks = [...new Set(C.days.map(monday))].sort();
-  const wIdx = new Map(weeks.map((w, i) => [w, i]));
-  const runWeek = weeks.map(w => C.runs.some(r => r.from <= addDays(w, 6) && r.to >= w));
+  /* 주 단위로 끊으면 소수 부서는 칸마다 5건 미만이라 표가 통째로 가려진다.
+     가려지는 칸이 많으면 집계 단위를 월로 올린다. 숫자를 못 보여주느니
+     기간을 넓혀서라도 보여주는 쪽이 낫다. */
+  const monthOf = d => d.slice(0, 7);
+  const pick = (keyOf, label) => {
+    const ks = [...new Set(C.days.map(keyOf))].sort();
+    const idx = new Map(ks.map((w, i) => [w, i]));
+    const cell = {};
+    for (const r of C.rows){
+      const k = r['처리부서'] + '|' + idx.get(keyOf(day(r['등록일'])));
+      (cell[k] = cell[k] || []).push(r);
+    }
+    const vals = Object.values(cell);
+    const hid = vals.filter(v => v.length < MIN_CELL).length;
+    return { ks, idx, cell, label, keyOf, hidden: vals.length ? hid / vals.length : 0 };
+  };
+  let B = pick(monday, '주');
+  if (B.hidden > 0.25) B = pick(monthOf, '월');
+
+  const runKey = B.ks.map(w => C.runs.some(r =>
+    r.from <= (B.label === '주' ? addDays(w, 6) : w + '-31') && r.to >= (B.label === '주' ? w : w + '-01')));
   const depts = [...count(C.rows, '처리부서')].sort((a, b) => b[1] - a[1]).map(([k]) => k);
-  const cell = {};
-  for (const r of C.rows){
-    const k = r['처리부서'] + '|' + wIdx.get(monday(day(r['등록일'])));
-    (cell[k] = cell[k] || []).push(r);
-  }
   let mx = 1;
-  for (const k in cell) mx = Math.max(mx, cell[k].length);
+  for (const k in B.cell) mx = Math.max(mx, B.cell[k].length);
   const shades = ['var(--surface-3)', 'color-mix(in srgb,var(--brand) 18%,var(--surface))',
     'color-mix(in srgb,var(--brand) 38%,var(--surface))', 'color-mix(in srgb,var(--brand) 62%,var(--surface))', 'var(--brand)'];
   const out = [];
-  let h = `<thead><tr><th></th>${weeks.map((w, i) => `<th${runWeek[i] ? ' class="run"' : ''}>${md(w)}</th>`).join('')}`
-    + `<th style="text-align:right">급증 구간 처리 비중</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th></th>${B.ks.map((w, i) =>
+      `<th${runKey[i] ? ' class="run"' : ''}>${B.label === '주' ? md(w) : (+w.slice(5)) + '월'}</th>`).join('')}`
+    + `<th style="text-align:right">건수</th><th style="text-align:right">급증 구간 처리 비중</th></tr></thead><tbody>`;
   for (const dp of depts){
     const all = C.rows.filter(r => r['처리부서'] === dp);
     const conc = all.length ? all.filter(r => C.inRun(day(r['등록일']))).length / all.length : 0;
-    out.push({ k: dp, conc });
-    h += `<tr><th class="dn" scope="row">${esc(dp)}</th>`;
-    weeks.forEach((w, i) => {
-      const rs = cell[dp + '|' + i] || [], n = rs.length;
+    const thin = all.length < MIN_DEPT;
+    out.push({ k: dp, conc, n: all.length, thin, ext: EXTERNAL.has(dp) });
+    h += `<tr${thin ? ' class="thin"' : ''}><th class="dn" scope="row">${esc(dp)}`
+       + `${EXTERNAL.has(dp) ? '<em class="ext">외부</em>' : ''}</th>`;
+    B.ks.forEach((w, i) => {
+      const rs = B.cell[dp + '|' + i] || [], n = rs.length;
       const lvl = n ? Math.min(4, Math.floor(n / mx * 5)) : 0;
       const txt = n < MIN_CELL ? (n ? '&lt;5' : '') : Math.round(overRate(rs) * 100) + '%';
       h += `<td style="background:${shades[lvl]};color:${lvl >= 3 ? 'var(--brand-ink)' : 'var(--text)'}"`
-        + ` title="${esc(dp)} · ${md(w)} 주 · ${n < MIN_CELL ? '5건 미만' : nf(n) + '건 · 기한초과 ' + txt}">${txt}</td>`;
+        + ` title="${esc(dp)} · ${w} ${B.label} · ${n < MIN_CELL ? '5건 미만' : nf(n) + '건 · 기한초과 ' + txt}">${txt}</td>`;
     });
-    h += `<td class="tot">${C.runs.length ? (conc > 0.5 ? `<b>${p1(conc)}</b>` : p1(conc)) : '—'}</td></tr>`;
+    h += `<td class="tot">${nf(all.length)}</td>`
+       + `<td class="tot">${!C.runs.length ? '—'
+          : thin ? `<span class="thinnote" title="모수 ${nf(all.length)}건 — 비율로 말하기에 너무 적습니다">모수 부족</span>`
+          : (conc > 0.5 ? `<b>${p1(conc)}</b>` : p1(conc))}</td></tr>`;
   }
   $('an-heat').innerHTML = h + '</tbody>';
   $('an-sw').innerHTML = shades.map(s => `<i style="background:${s}"></i>`).join('');
-  return out.sort((a, b) => b.conc - a.conc);
+  const sub = $('an-heat-sub');
+  if (sub) sub.textContent = `칸 = ${B.label} 단위 · 색 = 접수량 · 숫자 = 기한초과율`
+    + (B.label === '월' ? ' · 소수 부서가 많아 월 단위로 묶었습니다' : '');
+  // 순위는 모수가 충분하고 사내인 부서만. 외부기관은 인력 배정 대상이 아니다.
+  return out.filter(x => !x.thin && !x.ext).sort((a, b) => b.conc - a.conc);
 }
 
 /* ── 유입경로 ───────────────────────────────────────────────────── */

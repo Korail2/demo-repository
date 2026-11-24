@@ -596,3 +596,34 @@ table.plan{width:100%;min-width:900px;border-collapse:collapse;font-size:12.5px}
 /* 일별 추이는 153개 막대를 담아야 해서 최소 640px 가 필요하다. 좁은 화면에서
    페이지 전체가 밀리지 않도록 차트 영역 안에서만 가로로 움직이게 한다. */
 #an-trend{overflow-x:auto;overflow-y:hidden}
+
+/* 부서 부하 — 모수가 적은 부서는 흐리게 두고 비율 대신 '모수 부족'을 적는다.
+   한 달에 몇 건 들어오는 부서의 50% 는 비율이 아니라 잡음이다. */
+.heat tr.thin th.dn{color:var(--text-3)}
+.heat tr.thin td{opacity:.72}
+.heat th.dn em.ext{display:inline-block;margin-left:6px;padding:1px 5px;border-radius:3px;
+  font-style:normal;font-size:9.5px;font-weight:700;background:var(--surface-3);color:var(--text-3)}
+.heat .thinnote{font-size:10.5px;color:var(--text-3);border-bottom:1px dotted var(--border-2);cursor:help}
+.heat td.tot{font-family:var(--mono);font-size:11px;text-align:right;padding-left:10px}
+
+/* ── 마스킹 표시 ────────────────────────────────────────────────────
+   무엇을 가렸는지가 눈에 띄어야 한다. 더 중요한 건 '가공했는데 표시가
+   없던 것'이다 — 접수번호는 대체키이고 등록일은 시 단위로 잘렸는데
+   화면에서는 원본처럼 보였다. */
+.tok{font-weight:600;border:1px solid var(--brand-line);padding:0 4px;border-radius:3px}
+.tok::before{content:"🔒";font-size:.85em;margin-right:3px;filter:grayscale(1) opacity(.65)}
+i.mk{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:3px;cursor:help;
+  font-style:normal;font-size:9px;font-weight:700;letter-spacing:.02em;
+  background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);vertical-align:1px}
+.mlegend{display:inline-flex;align-items:center;gap:7px;margin-left:14px;
+  font-size:10.5px;color:var(--text-3);white-space:nowrap}
+.mlegend .tok{font-size:10px}
+.mbadge{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;margin-bottom:14px;
+  padding:9px 12px;border-radius:7px;background:var(--brand-50);border:1px solid var(--brand-line)}
+.mbadge .t{font-size:10.5px;font-weight:700;color:var(--brand)}
+.mbadge .v{font-size:12px;color:var(--text)}
+.mbadge .v b{font-weight:700}
+.mbadge .v.none{color:var(--text-3)}
+.mbadge .x{flex-basis:100%;font-size:10.5px;color:var(--text-3);margin-top:1px}
+/* 서랍은 폭이 좁다. 설명을 옆에 붙이면 한 글자씩 쪼개져 내려간다. */
+@media (max-width:900px){.mlegend{display:none}}
