@@ -89,7 +89,7 @@ def shim(paths) -> str:
 
 def build_index() -> str:
     h = inline_css(drop_fonts(rd("index.html")))
-    for js in ("common.js", "suggest.js", "analysis.js"):
+    for js in ("common.js", "suggest.js", "ingest.js", "analysis.js"):
         h = inline_js(h, js)
     mark = "<script>\n'use strict';\nconst DL_SYNC_LIMIT"
     if mark not in h:
@@ -147,6 +147,18 @@ GUIDE = """민원 조회 콘솔 — 사내 검토용 오프라인 묶음
 
    1·4번이 필요하면 서버 구성(Flask + PostgreSQL)이 있습니다.
    조회·반출이 DB 접속기록 테이블에 남고 데이터는 서버에만 둡니다.
+
+■ CSV 추가 · 추가분 초기화
+   조회 화면 맨 위에서 마스킹된 CSV 를 더할 수 있습니다.
+   받기 전에 두 가지를 검사하고, 통과한 것만 넣습니다.
+      · 화면이 쓰는 열이 다 있는지
+      · 본문에 가려지지 않은 이름·연락처가 남아 있는지
+   개인정보가 남아 있으면 받지 않고, 어떤 종류가 몇 행에 있는지 알려줍니다.
+   더한 데이터는 이 PC 의 브라우저에만 쌓입니다. 다른 분께는 보이지 않습니다.
+   '추가분 초기화'는 더한 것만 지우고 기본 데이터는 그대로 둡니다.
+
+   더블클릭(file://)으로 열면 브라우저가 저장소를 막는 경우가 있습니다.
+   그때는 창을 닫으면 추가분이 사라지며, 화면에 그렇게 표시됩니다.
 
 ■ 가벼움
    목록과 분석 화면은 민원 본문을 쓰지 않으므로, 처음에는 본문을 뺀

@@ -45,6 +45,17 @@ img{max-width:100%}
     <div class="phead-act" id="phead-act"></div>
   </header>
   <div class="content" id="view-search">
+  <section class="card">
+    <div class="card-bd dmrow">
+      <span class="dmstat" id="dm-stat">데이터를 불러오는 중…</span>
+      <span class="sp"></span>
+      <input type="file" id="dm-file" accept=".csv,text/csv" hidden>
+      <button class="btn" id="dm-add">CSV 추가</button>
+      <button class="btn" id="dm-reset">추가분 초기화</button>
+    </div>
+    <div class="dmmsg" id="dm-msg" hidden></div>
+  </section>
+
 <section class="card">
     <div class="card-hd"><h3>조회 조건</h3></div>
     <div class="card-bd">
@@ -248,6 +259,7 @@ img{max-width:100%}
 
 <script src="assets/common.js"></script>
 <script src="assets/suggest.js"></script>
+<script src="assets/ingest.js"></script>
 <script src="assets/analysis.js"></script>
 <script>
 'use strict';
@@ -276,6 +288,7 @@ const withBody = r => (FULL && FULL.get(r['접수번호'])) || r;
    서버 모드  /api 로 질의한다. 한 페이지씩만 내려오고 집계도 서버가 한다.
    부트에서 /api/health 응답 여부로 가른다. 화면 코드는 둘을 구분하지 않는다. */
 let SERVER = false, TOTAL = 0, SUM = null, DATA_RANGE = null;
+let BASE_N = 0, ADDED_N = 0;
 
 function qs(c, extra){
   const p = new URLSearchParams();
@@ -694,6 +707,76 @@ $('f-kw').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-searc
 $('dw-host').addEventListener('click', e => { if (e.target.closest('[data-close]')) closeDrawer(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
+/* ---------- 데이터 관리 ----------
+   더한 데이터는 이 브라우저에만 쌓인다. 서버가 없으므로 다른 PC 에는
+   보이지 않는다. 받기 전에 컬럼과 개인정보를 검사하고, 통과한 것만 넣는다.
+
+   넣거나 지운 뒤에는 새로고침한다. 선택지 목록·기간 경계·분석 집계가 전부
+   데이터에서 파생되는데, 그것들을 일일이 고쳐 맞추다 하나를 빠뜨리면
+   화면마다 다른 숫자가 나온다. 다시 읽는 편이 확실하다. */
+const DM_MSG = 'dm-msg-after-reload';
+
+function dmShow(kind, html){
+  const box = $('dm-msg');
+  box.hidden = false;
+  box.className = 'dmmsg ' + kind;
+  box.innerHTML = html;
+}
+function dmStat(){
+  const el = $('dm-stat');
+  if (SERVER){ el.textContent = '서버 모드 — 데이터는 서버에서 관리합니다'; 
+    $('dm-add').disabled = $('dm-reset').disabled = true; return; }
+  el.innerHTML = `기본 <b>${nf(BASE_N)}</b>행`
+    + (ADDED_N ? ` · 추가 <b class="plus">${nf(ADDED_N)}</b>행` : '')
+    + (ADDED_N && Ingest.isMemOnly() ? ' <em class="warnx">(이 창에서만 유지)</em>' : '');
+  $('dm-reset').disabled = !ADDED_N;
+}
+
+$('dm-add').onclick = () => $('dm-file').click();
+$('dm-file').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';                       // 같은 파일을 다시 골라도 동작하게
+  if (!f) return;
+  dmShow('busy', '읽는 중…');
+  const r = await Ingest.addFile(f);
+  if (!r.ok){
+    const detail = (r.leaks || []).map(x =>
+      `<li><b>${esc(x.kind)}</b> — ${x.at.map(n => n + '행').join(', ')} 등</li>`).join('');
+    dmShow('bad', `<b>${esc(r.error)}</b>`
+      + (detail ? `<ul class="leaks">${detail}</ul>`
+         + `<p>본문에 가려지지 않은 값이 남아 있습니다. `
+         + `<code>tools/pii_mask.py</code> 로 마스킹한 뒤 다시 올려 주세요.</p>` : '')
+      + (r.leaks ? '' : `<p class="need">필요한 열: ${Ingest.REQUIRED.join(', ')}</p>`));
+    return;
+  }
+  try { sessionStorage.setItem(DM_MSG, JSON.stringify(
+    { kind: 'good', text: `${esc(f.name)} — ${nf(r.added)}행을 추가했습니다.`
+      + (r.memOnly ? ' 이 브라우저가 저장소를 막아 두어, 창을 닫으면 사라집니다.' : '') })); } catch (e2){}
+  location.reload();
+};
+
+let dmArmed = false;
+$('dm-reset').onclick = () => {
+  if (!dmArmed){
+    dmArmed = true;
+    $('dm-reset').textContent = '정말 지웁니다';
+    $('dm-reset').classList.add('danger');
+    dmShow('warn', `추가한 <b>${nf(ADDED_N)}</b>행을 지우고 기본 데이터만 남깁니다. `
+      + `기본 데이터는 그대로입니다. 한 번 더 누르면 지워집니다.`);
+    setTimeout(() => {           // 실수로 두 번 누르는 것을 막는다
+      dmArmed = false;
+      $('dm-reset').textContent = '추가분 초기화';
+      $('dm-reset').classList.remove('danger');
+    }, 6000);
+    return;
+  }
+  Ingest.clear().then(() => {
+    try { sessionStorage.setItem(DM_MSG, JSON.stringify(
+      { kind: 'good', text: '추가한 데이터를 모두 지웠습니다.' })); } catch (e){}
+    location.reload();
+  });
+};
+
 /* ---------- 부트 ---------- */
 (async function boot(){
   // 서버가 붙어 있으면 서버 모드. 없으면 CSV 를 받아 브라우저가 거르는 정적 모드.
@@ -714,6 +797,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
     $('sgbar').hidden = true;          // 추천은 브라우저에 올라온 행으로 계산한다
   } else {
     DATA = await loadCSV('data/slim.csv') || [];
+    BASE_N = DATA.length;
+    try {
+      const extra = await Ingest.load();
+      if (extra.length){ ADDED_N = extra.length; DATA = DATA.concat(extra); }
+    } catch (e){ /* 저장소를 못 읽으면 기본 데이터로 간다 */ }
     if (DATA.length){
       $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
     } else {
@@ -721,6 +809,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
     }
     fillSelects();
   }
+  dmStat();
+  try {
+    const m = sessionStorage.getItem(DM_MSG);
+    if (m){ sessionStorage.removeItem(DM_MSG); const o = JSON.parse(m); dmShow(o.kind, o.text); }
+  } catch (e){}
   setPreset(0); renderHist(); await refresh();
   Analysis.init(SERVER ? [] : DATA);   // 같은 DATA 를 넘긴다 — CSV 를 다시 받지 않는다
 })();
