@@ -51,7 +51,8 @@ img{max-width:100%}
       <span class="sp"></span>
       <input type="file" id="dm-file" accept=".csv,text/csv" hidden>
       <button class="btn" id="dm-add">CSV 추가</button>
-      <button class="btn" id="dm-reset">추가분 초기화</button>
+      <button class="btn" id="dm-reset">초기화</button>
+      <button class="btn" id="dm-restore" hidden>기본 데이터 복원</button>
     </div>
     <div class="dmmsg" id="dm-msg" hidden></div>
   </section>
@@ -288,7 +289,7 @@ const withBody = r => (FULL && FULL.get(r['접수번호'])) || r;
    서버 모드  /api 로 질의한다. 한 페이지씩만 내려오고 집계도 서버가 한다.
    부트에서 /api/health 응답 여부로 가른다. 화면 코드는 둘을 구분하지 않는다. */
 let SERVER = false, TOTAL = 0, SUM = null, DATA_RANGE = null;
-let BASE_N = 0, ADDED_N = 0;
+let BASE_N = 0, ADDED_N = 0, BASE_HIDDEN = false;
 
 function qs(c, extra){
   const p = new URLSearchParams();
@@ -724,12 +725,15 @@ function dmShow(kind, html){
 }
 function dmStat(){
   const el = $('dm-stat');
-  if (SERVER){ el.textContent = '서버 모드 — 데이터는 서버에서 관리합니다'; 
+  if (SERVER){ el.textContent = '서버 모드 — 데이터는 서버에서 관리합니다';
     $('dm-add').disabled = $('dm-reset').disabled = true; return; }
-  el.innerHTML = `기본 <b>${nf(BASE_N)}</b>행`
+  el.innerHTML = (BASE_HIDDEN
+      ? `기본 데이터 <b class="off">비움</b>`
+      : `기본 <b>${nf(BASE_N)}</b>행`)
     + (ADDED_N ? ` · 추가 <b class="plus">${nf(ADDED_N)}</b>행` : '')
     + (ADDED_N && Ingest.isMemOnly() ? ' <em class="warnx">(이 창에서만 유지)</em>' : '');
-  $('dm-reset').disabled = !ADDED_N;
+  $('dm-reset').disabled = !ADDED_N && !BASE_N;
+  $('dm-restore').hidden = !BASE_HIDDEN;
 }
 
 $('dm-add').onclick = () => $('dm-file').click();
@@ -755,26 +759,35 @@ $('dm-file').onchange = async e => {
   location.reload();
 };
 
-let dmArmed = false;
-$('dm-reset').onclick = () => {
-  if (!dmArmed){
-    dmArmed = true;
-    $('dm-reset').textContent = '정말 지웁니다';
-    $('dm-reset').classList.add('danger');
-    dmShow('warn', `추가한 <b>${nf(ADDED_N)}</b>행을 지우고 기본 데이터만 남깁니다. `
-      + `기본 데이터는 그대로입니다. 한 번 더 누르면 지워집니다.`);
-    setTimeout(() => {           // 실수로 두 번 누르는 것을 막는다
-      dmArmed = false;
-      $('dm-reset').textContent = '추가분 초기화';
-      $('dm-reset').classList.remove('danger');
-    }, 6000);
-    return;
-  }
-  Ingest.clear().then(() => {
-    try { sessionStorage.setItem(DM_MSG, JSON.stringify(
-      { kind: 'good', text: '추가한 데이터를 모두 지웠습니다.' })); } catch (e){}
-    location.reload();
-  });
+/* 지우는 범위를 묻는다. 한 버튼으로 둘 다 처리하면 어느 쪽이 실행될지
+   누르는 사람이 알 수 없다. 범위를 보이게 적고 고르게 한다. */
+function dmAskReset(){
+  const parts = [];
+  if (ADDED_N) parts.push(`<button type="button" class="btn btn-sm" data-wipe="added">`
+    + `추가분만 지우기 <em>${nf(ADDED_N)}행</em></button>`);
+  if (BASE_N || ADDED_N) parts.push(`<button type="button" class="btn btn-sm danger" data-wipe="all">`
+    + `전체 비우기 <em>기본 더미까지</em></button>`);
+  parts.push(`<button type="button" class="btn btn-sm" data-wipe="cancel">취소</button>`);
+  dmShow('warn', `<b>무엇을 지울까요?</b>`
+    + `<p>'전체 비우기'는 기본 더미까지 화면에서 뺍니다. 파일이 지워지는 것은 아니라서 `
+    + `'기본 데이터 복원'으로 언제든 되돌릴 수 있습니다.</p>`
+    + `<div class="dmacts">${parts.join('')}</div>`);
+}
+function dmAfter(text){
+  try { sessionStorage.setItem(DM_MSG, JSON.stringify({ kind: 'good', text })); } catch (e){}
+  location.reload();
+}
+$('dm-reset').onclick = dmAskReset;
+$('dm-msg').addEventListener('click', e => {
+  const b = e.target.closest('[data-wipe]'); if (!b) return;
+  const what = b.dataset.wipe;
+  if (what === 'cancel'){ $('dm-msg').hidden = true; return; }
+  if (what === 'added') Ingest.clear().then(() => dmAfter('추가한 데이터를 지웠습니다.'));
+  else Ingest.wipeAll().then(() => dmAfter('데이터를 모두 비웠습니다. 기본 데이터는 복원할 수 있습니다.'));
+});
+$('dm-restore').onclick = () => {
+  Ingest.restoreBase();
+  dmAfter('기본 데이터를 복원했습니다.');
 };
 
 /* ---------- 부트 ---------- */
@@ -796,16 +809,23 @@ $('dm-reset').onclick = () => {
     DATA_RANGE = fc.range;
     $('sgbar').hidden = true;          // 추천은 브라우저에 올라온 행으로 계산한다
   } else {
-    DATA = await loadCSV('data/slim.csv') || [];
+    BASE_HIDDEN = Ingest.baseHidden();
+    DATA = BASE_HIDDEN ? [] : (await loadCSV('data/slim.csv') || []);
     BASE_N = DATA.length;
     try {
       const extra = await Ingest.load();
       if (extra.length){ ADDED_N = extra.length; DATA = DATA.concat(extra); }
     } catch (e){ /* 저장소를 못 읽으면 기본 데이터로 간다 */ }
     if (DATA.length){
-      $('src').innerHTML = `<span class="lbl">합성 더미</span><b>${nf(DATA.length)}</b>행<br>${esc(day(DATA[0]['등록일']))}<br>~ ${esc(day(DATA[DATA.length - 1]['등록일']))}`;
+      // 파일이 날짜순이라는 보장이 없다. CSV 를 추가하면 뒤에 붙으므로
+      // 마지막 행이 최신이 아니다. 실제 최소·최대를 구한다.
+      const [lo, hi] = bounds();
+      $('src').innerHTML = `<span class="lbl">${BASE_HIDDEN ? '추가 데이터' : '합성 더미'}</span>`
+        + `<b>${nf(DATA.length)}</b>행<br>${esc(lo || '—')}<br>~ ${esc(hi || '—')}`;
     } else {
-      $('src').innerHTML = '<span class="lbl">데이터</span>불러오지 못했습니다';
+      $('src').innerHTML = BASE_HIDDEN
+        ? '<span class="lbl">데이터</span>비움<br><span class="lbl" style="margin-top:4px">복원 가능</span>'
+        : '<span class="lbl">데이터</span>불러오지 못했습니다';
     }
     fillSelects();
   }
@@ -815,7 +835,8 @@ $('dm-reset').onclick = () => {
     if (m){ sessionStorage.removeItem(DM_MSG); const o = JSON.parse(m); dmShow(o.kind, o.text); }
   } catch (e){}
   setPreset(0); renderHist(); await refresh();
-  Analysis.init(SERVER ? [] : DATA);   // 같은 DATA 를 넘긴다 — CSV 를 다시 받지 않는다
+  Analysis.init(SERVER ? [] : DATA,
+    (!SERVER && !DATA.length) ? '데이터를 모두 비웠습니다. CSV 를 추가하거나 기본 데이터를 복원하면 다시 집계됩니다.' : '');   // 같은 DATA 를 넘긴다 — CSV 를 다시 받지 않는다
 })();
 </script>
 

@@ -603,10 +603,12 @@ function markQuick(){
 
 /* ── 시작 ──────────────────────────────────────────────────────────
    조회 보기가 이미 받은 DATA 를 넘겨받는다. CSV 를 두 번 받지 않는다. */
-function init(rows){
+function init(rows, note){
   DATA = rows || [];
   if (!DATA.length){
-    $('an-brief').innerHTML = '<li>분석할 데이터가 없습니다. 서버 모드에서는 원본 행이 브라우저로 오지 않으므로, 분석 집계 API(/api/analytics)가 붙어야 이 보기가 동작합니다.</li>';
+    $('an-brief').innerHTML = '<li>' + (note ||
+      '분석할 데이터가 없습니다. 서버 모드에서는 원본 행이 브라우저로 오지 않으므로, '
+      + '분석 집계 API(/api/analytics)가 붙어야 이 보기가 동작합니다.') + '</li>';
     return;
   }
   AGG = sgAgg(DATA);

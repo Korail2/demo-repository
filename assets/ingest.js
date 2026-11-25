@@ -45,6 +45,21 @@ const Ingest = (function (){
   let memOnly = false;      // IndexedDB 를 못 쓰는 환경
   let memRows = [];
 
+  /* 기본 더미를 숨겼는지. 지우는 것이 아니라 읽지 않는 것이다 —
+     data/slim.csv 는 배포물의 일부라 브라우저가 지울 수 없고, 지울
+     이유도 없다. 플래그만 세워 두고 다시 켤 수 있게 둔다. */
+  const BASE_KEY = 'korail-cs.base-hidden';
+  let memBaseHidden = false;
+  function baseHidden(){
+    try { return localStorage.getItem(BASE_KEY) === '1'; }
+    catch (e){ return memBaseHidden; }
+  }
+  function setBaseHidden(v){
+    memBaseHidden = !!v;
+    try { v ? localStorage.setItem(BASE_KEY, '1') : localStorage.removeItem(BASE_KEY); }
+    catch (e){ /* 저장소를 막아 둔 환경에서는 이번 세션에만 적용된다 */ }
+  }
+
   /* ── 저장소 ─────────────────────────────────────────────────────── */
   function open(){
     return new Promise((res, rej) => {
@@ -176,5 +191,13 @@ const Ingest = (function (){
     return { ok: true, added: rows.length, rows, memOnly };
   }
 
-  return { load, addFile, clear, isMemOnly: () => memOnly, REQUIRED };
+  /* 전부 비우기 — 더한 것을 지우고 기본 더미도 읽지 않게 한다. */
+  async function wipeAll(){
+    await clear();
+    setBaseHidden(true);
+  }
+
+  return { load, addFile, clear, wipeAll,
+           baseHidden, restoreBase: () => setBaseHidden(false),
+           isMemOnly: () => memOnly, REQUIRED };
 })();

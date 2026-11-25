@@ -607,3 +607,6 @@ i.mk{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:3px;curs
 .dmmsg code{font-family:var(--mono);font-size:11.5px;background:var(--surface);padding:1px 4px;border-radius:3px}
 .dmmsg ul.leaks{margin:7px 0 0;padding-left:19px}
 .dmmsg ul.leaks li{margin-bottom:2px}
+.dmstat b.off{color:var(--crit)}
+.dmacts{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.dmacts .btn em{font-style:normal;font-weight:400;opacity:.75;margin-left:5px;font-size:11px}
